@@ -31,20 +31,15 @@
                         <!-- Botões e pesquisa -->
                         <div class="bg-gray-50 rounded-xl p-6 mb-6">
                             <div class="flex justify-center gap-4 mb-4">
+                                <button id="btnSaidaMassiva" onclick="saidaMassiva()" class="btn-large bg-red-600 hover:bg-red-700 text-white">
+                                    <i class="fas fa-sign-out-alt mr-2"></i> Saída Massiva
+                                </button>
                                 <button onclick="gerarExcel()" class="btn-large bg-green-600 hover:bg-green-700 text-white">
                                     <i class="fas fa-file-excel mr-2"></i> Gerar Excel
                                 </button>
-                                <button id="btnSaidaSelecionadas" onclick="saidaSelecionadas()" class="btn-large bg-red-600 hover:bg-red-700 text-white" style="display: none;">
-                                    <i class="fas fa-sign-out-alt mr-2"></i> Dar Saída (<span id="contadorSelecionadas">0</span>)
-                                </button>
                             </div>
-                            <div class="flex justify-center gap-4">
-                                <select id="tipoFiltroEstoque" class="form-input-large">
-                                    <option value="geral">Selecione o tipo de busca</option>
-                                    <option value="peca_op">PEÇA+OP</option>
-                                    <option value="local">LOCAL</option>
-                                </select>
-                                <input type="text" id="campoPesquisaEstoque" placeholder="Pesquisar..." 
+                            <div class="flex justify-center">
+                                <input type="text" id="campoPesquisaEstoque" placeholder="Pesquisar OP, Peça, Veículo, Local..." 
                                        class="form-input-large w-96"
                                        oninput="filtrarTabelaEstoque()">
                             </div>
@@ -56,20 +51,21 @@
                                 <thead>
                                     <tr class="bg-gray-50">
                                         <th class="border border-gray-200 px-4 py-3 text-center">
-                                            <i class="fas fa-check-square text-gray-400"></i>
+                                            <input type="checkbox" id="selectAll" onchange="toggleAll()">
                                         </th>
-                                        <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(1)">OP</th>
-                                        <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(2)">PEÇA</th>
-                                        <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(3)">PROJETO</th>
-                                        <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(4)">VEÍCULO</th>
-                                        <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(5)">LOCAL</th>
-                                        <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(6)">CAMADA</th>
+                                        <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(1)">OP PAI</th>
+                                        <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(2)">OP</th>
+                                        <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(3)">PEÇA</th>
+                                        <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(4)">PROJETO</th>
+                                        <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(5)">VEÍCULO</th>
+                                        <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(6)">LOCAL</th>
+                                        <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(7)">RACK</th>
                                         <th class="border border-gray-200 px-4 py-3 text-center text-sm font-semibold text-gray-700">AÇÃO</th>
                                     </tr>
                                 </thead>
                                 <tbody id="estoque-tbody">
                                     <tr>
-                                        <td colspan="7" class="border border-gray-200 px-4 py-6 text-center text-gray-500">
+                                        <td colspan="9" class="border border-gray-200 px-4 py-6 text-center text-gray-500">
                                             Carregando estoque...
                                         </td>
                                     </tr>

@@ -20,7 +20,7 @@ def atualizar_apontamentos():
         DB_NAME = os.getenv('DB_NAME')
         connection_string = f'postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}'
 
-        ontem = (datetime.today() - timedelta(days=1)).strftime('%y-%m-%d')
+        ontem = (datetime.today() - timedelta(days=3)).strftime('%y-%m-%d')
         hoje = datetime.today().strftime('%y-%m-%d')
 
         url = f"https://www.pplug.com.br/PP_pesquisa_api_vertco.php?etapa_aponta=TODAS&data_aponta={ontem}&data_fim={hoje}&token=acessoJARINUconsulta"
@@ -33,10 +33,12 @@ def atualizar_apontamentos():
         response_clear = response.text[1:-1]
         data = json.loads(response_clear)
 
+        logger.info(f"Criando o DataFrame")
         df = pd.DataFrame(data)
         df.columns = df.iloc[0]             # define colunas reais
         df = df.drop([0]).reset_index(drop=True)
 
+        logger.info(f"Colunas disponíveis: {df.columns.tolist()}")  # Diagnóstico útil
 
         df['Veículo'] = df['MODELO'].apply(lambda x: ' '.join(x.split(' ')[2:]) if pd.notna(x) else None)
 
@@ -99,6 +101,7 @@ def atualizar_apontamentos():
             df_final[col] = df_final[col].replace("", None).astype(str)
 
         # Verificação e conexão
+        logger.info("Verificando dados antes da inserção")
 
         with engine.connect() as connection:
             query = text(f"SELECT id, data FROM public.apontamento_pplug_jarinu")

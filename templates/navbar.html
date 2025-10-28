@@ -35,14 +35,6 @@
                 <a href="{{ url_for('arquivos') }}" class="navbar-link text-white hover:text-gray-300 px-2 py-2 rounded-md text-sm font-medium transition duration-200 {{ 'active' if request.endpoint == 'arquivos' }}">
                     Arquivos
                 </a>
-                <a href="{{ url_for('saidas_exit') }}" class="navbar-link text-white hover:text-gray-300 px-2 py-2 rounded-md text-sm font-medium transition duration-200 {{ 'active' if request.endpoint == 'saidas_exit' }}">
-                    Saídas
-                </a>
-                {% endif %}
-                {% if current_user and current_user.setor in ['Produção', 'Administrativo', 'T.I'] %}
-                <a href="{{ url_for('relatorio') }}" class="navbar-link text-white hover:text-gray-300 px-2 py-2 rounded-md text-sm font-medium transition duration-200 {{ 'active' if request.endpoint == 'relatorio' }}">
-                    Relatório
-                </a>
                 {% endif %}
 
                 {% if current_user and current_user.setor == 'T.I' %}
@@ -88,14 +80,6 @@
                     {% if current_user and current_user.setor in ['Administrativo', 'T.I'] %}
                     <a href="{{ url_for('arquivos') }}" class="text-white hover:bg-blue-600 block px-4 py-3 rounded-md text-base font-medium transition-colors">
                         <i class="fas fa-file-alt mr-2"></i>Arquivos
-                    </a>
-                    <a href="{{ url_for('saidas_exit') }}" class="text-white hover:bg-blue-600 block px-4 py-3 rounded-md text-base font-medium transition-colors">
-                        <i class="fas fa-door-open mr-2"></i>Saídas Exit
-                    </a>
-                    {% endif %}
-                    {% if current_user and current_user.setor in ['Produção', 'Administrativo', 'T.I'] %}
-                    <a href="{{ url_for('relatorio') }}" class="text-white hover:bg-blue-600 block px-4 py-3 rounded-md text-base font-medium transition-colors">
-                        <i class="fas fa-chart-bar mr-2"></i>Relatório
                     </a>
                     {% endif %}
                     {% if current_user and current_user.setor != 'Produção' %}

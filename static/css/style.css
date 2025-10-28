@@ -728,14 +728,6 @@ tr:hover { background-color: #f3f4f6; }
     border: 1px solid #93c5fd;
 }
 
-/* Checkbox styling */
-input[type="checkbox"] {
-    width: 24px;
-    height: 24px;
-    cursor: pointer;
-    transform: scale(1.2);
-}
-
 .badge-vazio {
     color: #9ca3af;
     font-size: 0.875rem;

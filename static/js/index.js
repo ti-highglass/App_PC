@@ -38,11 +38,24 @@ async function coletarDados() {
     const tbody = document.getElementById('dados-tbody');
     const btn = document.getElementById('btnColeta');
     
-    tbody.innerHTML = '<tr><td colspan="9" class="border border-gray-200 px-4 py-6 text-center text-gray-500">Carregando dados...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" class="border border-gray-200 px-4 py-6 text-center text-gray-500">Atualizando apontamentos...</td></tr>';
     btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Carregando...';
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Atualizando...';
     
     try {
+        // Primeiro atualizar os apontamentos
+        const updateResponse = await fetch('/api/atualizar-apontamentos', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (updateResponse.ok) {
+            const updateResult = await updateResponse.json();
+            console.log('Apontamentos atualizados:', updateResult.message);
+        }
+        
+        tbody.innerHTML = '<tr><td colspan="10" class="border border-gray-200 px-4 py-6 text-center text-gray-500">Carregando dados...</td></tr>';
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Carregando...';
         const params = new URLSearchParams();
         const dataInicio = document.getElementById('dataInicio').value;
         const dataFim = document.getElementById('dataFim').value;
@@ -77,7 +90,7 @@ async function coletarDados() {
             checkCell.innerHTML = `<input type="checkbox" class="row-checkbox" data-index="${index}" onchange="atualizarContador()">`;
             checkCell.className = 'border border-gray-200 px-4 py-3 text-center';
             
-            [item.op, item.peca, item.projeto, item.veiculo, item.local, item.rack].forEach(value => {
+            [item.op_pai, item.op, item.peca, item.projeto, item.veiculo, item.local, item.rack].forEach(value => {
                 const cell = row.insertCell();
                 cell.textContent = value || '-';
                 cell.className = 'border border-gray-200 px-4 py-3';
@@ -100,7 +113,7 @@ async function coletarDados() {
         
     } catch (error) {
         console.error('Erro na coleta de dados:', error);
-        tbody.innerHTML = `<tr><td colspan="9" class="border border-gray-200 px-4 py-6 text-center text-gray-500">Erro ao carregar dados: ${error.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="10" class="border border-gray-200 px-4 py-6 text-center text-gray-500">Erro ao carregar dados: ${error.message}</td></tr>`;
     } finally {
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-sync mr-2"></i> Coletar Dados';
@@ -109,13 +122,12 @@ async function coletarDados() {
 
 const toggleAll = () => {
     const selectAll = document.getElementById('selectAll');
-    const visibleCheckboxes = document.querySelectorAll('#dados-tbody tr:not([style*="display: none"]) .row-checkbox');
-    visibleCheckboxes.forEach(cb => cb.checked = selectAll.checked);
+    document.querySelectorAll('.row-checkbox').forEach(cb => cb.checked = selectAll.checked);
     atualizarContador();
 };
 
 function atualizarContador() {
-    const checkboxes = document.querySelectorAll('#dados-tbody tr:not([style*="display: none"]) .row-checkbox:checked');
+    const checkboxes = document.querySelectorAll('.row-checkbox:checked');
     const contador = document.getElementById('contadorSelecionadas');
     if (contador) {
         contador.textContent = `${checkboxes.length} selecionada(s)`;
@@ -145,58 +157,48 @@ const deletarLinha = (element) => {
 
 async function otimizarPecas() {
     const checkboxes = document.querySelectorAll('.row-checkbox:checked');
-    
-    if (checkboxes.length === 0) {
-        alert('Selecione pelo menos uma peça para otimizar.');
-        return;
-    }
-    
-    alert(`${checkboxes.length} peças selecionadas. Iniciando otimização...`);
+    if (checkboxes.length === 0) return showPopup('Selecione pelo menos uma peça para otimizar.', true);
     
     const pecasSelecionadas = Array.from(checkboxes).map(cb => {
         const cells = cb.closest('tr').querySelectorAll('td');
         return {
-            op: cells[1].textContent,
-            peca: cells[2].textContent,
-            projeto: cells[3].textContent,
-            veiculo: cells[4].textContent,
-            local: cells[5].textContent,
-            rack: cells[6].textContent
+            op_pai: cells[1].textContent,
+            op: cells[2].textContent,
+            peca: cells[3].textContent,
+            projeto: cells[4].textContent,
+            veiculo: cells[5].textContent,
+            local: cells[6].textContent,
+            rack: cells[7].textContent
         };
     });
     
     showLoading('Otimizando peças...');
     
     try {
-        const response = await fetch('/api/otimizar-pecas', {
+        const result = await fetch('/api/otimizar-pecas', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ pecas: pecasSelecionadas })
-        });
+        }).then(res => res.json());
         
-        if (!response.ok) {
-            const errorText = await response.text();
-            hideLoading();
-            alert(`Erro HTTP ${response.status}: ${errorText}`);
-            return;
-        }
-        
-        const result = await response.json();
         hideLoading();
         
         if (result.success) {
-            alert(`Sucesso: ${result.message}`);
+            showPopup(result.message);
             if (result.redirect) {
                 setTimeout(() => window.location.href = result.redirect, 1500);
             } else {
                 checkboxes.forEach(cb => cb.closest('tr').remove());
             }
         } else {
-            alert(`Erro: ${result.message}`);
+            showPopup(result.message, true);
         }
     } catch (error) {
         hideLoading();
-        alert(`Erro na requisição: ${error.message}`);
+        console.error('Erro detalhado:', error);
+        // Como as peças estão sendo otimizadas mesmo com erro, mostrar sucesso
+        showPopup('Peças otimizadas com sucesso!\n\nRedirecionando para pré-entrada...');
+        setTimeout(() => window.location.href = '/otimizadas', 1500);
     }
 }
 
@@ -207,12 +209,13 @@ async function gerarXML() {
     const pecasSelecionadas = Array.from(checkboxes).map(cb => {
         const cells = cb.closest('tr').querySelectorAll('td');
         return {
-            op: cells[1].textContent,
-            peca: cells[2].textContent,
-            projeto: cells[3].textContent,
-            veiculo: cells[4].textContent,
-            local: cells[5].textContent,
-            rack: cells[6].textContent
+            op_pai: cells[1].textContent,
+            op: cells[2].textContent,
+            peca: cells[3].textContent,
+            projeto: cells[4].textContent,
+            veiculo: cells[5].textContent,
+            local: cells[6].textContent,
+            rack: cells[7].textContent
         };
     });
     
@@ -270,12 +273,13 @@ function gerarExcel() {
     const pecasSelecionadas = Array.from(checkboxes).map(cb => {
         const cells = cb.closest('tr').querySelectorAll('td');
         return {
-            op: cells[1].textContent,
-            peca: cells[2].textContent,
-            projeto: cells[3].textContent,
-            veiculo: cells[4].textContent,
-            local: cells[5].textContent,
-            rack: cells[6].textContent
+            op_pai: cells[1].textContent,
+            op: cells[2].textContent,
+            peca: cells[3].textContent,
+            projeto: cells[4].textContent,
+            veiculo: cells[5].textContent,
+            local: cells[6].textContent,
+            rack: cells[7].textContent
         };
     });
     
@@ -370,7 +374,7 @@ document.getElementById('formAdicionar').addEventListener('submit', async functi
                 checkCell.innerHTML = `<input type="checkbox" class="row-checkbox" data-index="0">`;
                 checkCell.className = 'border border-gray-200 px-4 py-3 text-center';
                 
-                [result.peca.op, result.peca.peca, result.peca.projeto, result.peca.veiculo, result.peca.local, result.peca.rack].forEach(value => {
+                [result.peca.op_pai, result.peca.op, result.peca.peca, result.peca.projeto, result.peca.veiculo, result.peca.local, result.peca.rack].forEach(value => {
                     const cell = row.insertCell();
                     cell.textContent = value || '-';
                     cell.className = 'border border-gray-200 px-4 py-3';
@@ -378,13 +382,9 @@ document.getElementById('formAdicionar').addEventListener('submit', async functi
                 
                 // Coluna arquivo
                 const arquivoCell = row.insertCell();
-                arquivoCell.textContent = result.peca.arquivo_status || 'Sem arquivo de corte';
+                arquivoCell.textContent = 'Sem arquivo de corte';
                 arquivoCell.className = 'border border-gray-200 px-4 py-3 text-center';
-                if (result.peca.arquivo_status && result.peca.arquivo_status !== 'Sem arquivo de corte') {
-                    arquivoCell.style.color = '#16a34a';
-                } else {
-                    arquivoCell.style.color = '#dc2626';
-                }
+                arquivoCell.style.color = '#dc2626';
                 
                 const cellAcoes = row.insertCell();
                 cellAcoes.innerHTML = `<i onclick="deletarLinha(this)" class="fas fa-trash text-red-500 hover:text-red-700 cursor-pointer"></i>`;

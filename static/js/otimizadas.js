@@ -6,20 +6,17 @@ document.addEventListener('DOMContentLoaded', () => {
 async function carregarOtimizadas() {
     const tbody = document.getElementById('otimizadas-tbody');
     try {
-        const response = await fetch('/api/otimizadas');
-        console.log('Response status:', response.status);
-        const dados = await response.json();
-        console.log('Dados recebidos:', dados);
+        const dados = await fetch('/api/otimizadas').then(res => res.json());
         
         tbody.innerHTML = '';
         
         if (dados.error) {
-            tbody.innerHTML = `<tr><td colspan="8" class="border border-gray-200 px-4 py-6 text-center text-red-500">Erro: ${dados.error}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="10" class="border border-gray-200 px-4 py-6 text-center text-red-500">Erro: ${dados.error}</td></tr>`;
             return;
         }
         
-        if (!dados || dados.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" class="border border-gray-200 px-4 py-6 text-center text-gray-500">Nenhuma peça otimizada</td></tr>';
+        if (dados.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="10" class="border border-gray-200 px-4 py-6 text-center text-gray-500">Nenhuma peça otimizada</td></tr>';
             return;
         }
         
@@ -31,7 +28,7 @@ async function carregarOtimizadas() {
             checkCell.innerHTML = `<input type="checkbox" class="row-checkbox" data-id="${item.id}">`;
             checkCell.className = 'border border-gray-200 px-4 py-3 text-center';
             
-            [item.op, item.peca, item.projeto, item.veiculo, item.local, item.camada].forEach(value => {
+            [item.op_pai, item.op, item.peca, item.projeto, item.veiculo, item.local, item.rack, item.camada].forEach(value => {
                 const cell = row.insertCell();
                 cell.textContent = value || '-';
                 cell.className = 'border border-gray-200 px-4 py-3 text-sm text-gray-700';
@@ -51,14 +48,13 @@ async function carregarOtimizadas() {
         atualizarContadorOtimizadas(dados.length);
         
     } catch (error) {
-        tbody.innerHTML = '<tr><td colspan="8" class="border border-gray-200 px-4 py-6 text-center text-red-500">Erro ao carregar peças</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="11" class="border border-gray-200 px-4 py-6 text-center text-red-500">Erro ao carregar peças</td></tr>';
     }
 }
 
 const toggleAll = () => {
     const selectAll = document.getElementById('selectAll');
-    const visibleCheckboxes = document.querySelectorAll('#otimizadas-tbody tr:not([style*="display: none"]) .row-checkbox');
-    visibleCheckboxes.forEach(cb => cb.checked = selectAll.checked);
+    document.querySelectorAll('.row-checkbox').forEach(cb => cb.checked = selectAll.checked);
 };
 
 async function enviarParaEstoque() {
@@ -263,7 +259,6 @@ function hideLoading() {
 
 const filtrarTabelaOtimizadas = () => {
     const filtro = document.getElementById('campoPesquisaOtimizadas').value.toLowerCase();
-    const tipoFiltro = document.getElementById('tipoFiltroOtimizadas').value;
     let visibleCount = 0;
     
     document.querySelectorAll('#otimizadas-tbody tr').forEach(linha => {
@@ -271,30 +266,11 @@ const filtrarTabelaOtimizadas = () => {
         let match = false;
         
         if (cells.length >= 8) {
-            switch(tipoFiltro) {
-                case 'peca_op':
-                    const peca = cells[2].textContent.toLowerCase();
-                    const op = cells[1].textContent.toLowerCase();
-                    match = `${peca}${op}`.includes(filtro);
-                    break;
-                case 'op':
-                    match = cells[1].textContent.toLowerCase().includes(filtro);
-                    break;
-                case 'peca':
-                    match = cells[2].textContent.toLowerCase().includes(filtro);
-                    break;
-                case 'local':
-                    match = cells[5].textContent.toLowerCase().includes(filtro);
-                    break;
-                case 'projeto':
-                    match = cells[3].textContent.toLowerCase().includes(filtro);
-                    break;
-                case 'veiculo':
-                    match = cells[4].textContent.toLowerCase().includes(filtro);
-                    break;
-                default:
-                    match = linha.textContent.toLowerCase().includes(filtro);
-            }
+            const peca = cells[3].textContent.toLowerCase();
+            const op = cells[2].textContent.toLowerCase();
+            const camada = cells[8].textContent.toLowerCase();
+            const searchText = `${peca}${op}${camada}`;
+            match = searchText.includes(filtro) || linha.textContent.toLowerCase().includes(filtro);
         } else {
             match = linha.textContent.toLowerCase().includes(filtro);
         }

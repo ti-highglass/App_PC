@@ -11,7 +11,7 @@ async function carregarEstoque() {
         tbody.innerHTML = '';
         
         if (!dados || dados.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="border border-gray-200 px-4 py-6 text-center text-gray-500">Nenhum item no estoque</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" class="border border-gray-200 px-4 py-6 text-center text-gray-500">Nenhum item no estoque</td></tr>';
             return;
         }
         
@@ -20,10 +20,10 @@ async function carregarEstoque() {
             row.className = 'hover:bg-gray-50';
             
             const checkCell = row.insertCell();
-            checkCell.innerHTML = `<input type="checkbox" class="row-checkbox" data-id="${item.id}" onchange="atualizarBotaoSaida()">`;
+            checkCell.innerHTML = `<input type="checkbox" class="row-checkbox" data-id="${item.id}">`;
             checkCell.className = 'border border-gray-200 px-4 py-3 text-center';
             
-            [item.op, item.peca, item.projeto, item.veiculo, item.local, item.camada].forEach(value => {
+            [item.op_pai, item.op, item.peca, item.projeto, item.veiculo, item.local, item.rack].forEach(value => {
                 const cell = row.insertCell();
                 cell.textContent = value || '-';
                 cell.className = 'border border-gray-200 px-4 py-3 text-sm text-gray-700';
@@ -31,7 +31,7 @@ async function carregarEstoque() {
             
             const acaoCell = row.insertCell();
             acaoCell.className = 'border border-gray-200 px-4 py-3 text-center';
-            acaoCell.innerHTML = `<button onclick="removerPeca(${item.id})" class="btn-large bg-red-600 hover:bg-red-700 text-white">Confirmar Utilização</button>`;
+            acaoCell.innerHTML = `<button onclick="removerPeca(${item.id})" class="btn-red text-white">Confirmar Utilização</button>`;
         });
         
         atualizarContadorEstoque(dados.length);
@@ -39,7 +39,7 @@ async function carregarEstoque() {
     } catch (error) {
         console.error('Erro ao carregar estoque:', error);
         const tbody = document.getElementById('estoque-tbody');
-        tbody.innerHTML = '<tr><td colspan="7" class="border border-gray-200 px-4 py-6 text-center text-red-500">Erro ao carregar dados do estoque</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="border border-gray-200 px-4 py-6 text-center text-red-500">Erro ao carregar dados do estoque</td></tr>';
     }
 }
 
@@ -47,7 +47,6 @@ async function carregarEstoque() {
 
 const filtrarTabelaEstoque = () => {
     const filtro = document.getElementById('campoPesquisaEstoque').value.toLowerCase();
-    const tipoFiltro = document.getElementById('tipoFiltroEstoque').value;
     let visibleCount = 0;
     
     document.querySelectorAll('#estoque-tbody tr').forEach(linha => {
@@ -55,30 +54,10 @@ const filtrarTabelaEstoque = () => {
         let match = false;
         
         if (cells.length >= 7) {
-            switch(tipoFiltro) {
-                case 'peca_op':
-                    const peca = cells[2].textContent.toLowerCase();
-                    const op = cells[1].textContent.toLowerCase();
-                    match = `${peca}${op}`.includes(filtro);
-                    break;
-                case 'op':
-                    match = cells[1].textContent.toLowerCase().includes(filtro);
-                    break;
-                case 'peca':
-                    match = cells[2].textContent.toLowerCase().includes(filtro);
-                    break;
-                case 'local':
-                    match = cells[5].textContent.toLowerCase().includes(filtro);
-                    break;
-                case 'projeto':
-                    match = cells[3].textContent.toLowerCase().includes(filtro);
-                    break;
-                case 'veiculo':
-                    match = cells[4].textContent.toLowerCase().includes(filtro);
-                    break;
-                default:
-                    match = linha.textContent.toLowerCase().includes(filtro);
-            }
+            const peca = cells[3].textContent.toLowerCase();
+            const op = cells[2].textContent.toLowerCase();
+            const searchText = `${peca}${op}`;
+            match = searchText.includes(filtro) || linha.textContent.toLowerCase().includes(filtro);
         } else {
             match = linha.textContent.toLowerCase().includes(filtro);
         }
@@ -106,7 +85,7 @@ async function removerPeca(id) {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ ids: [id], tipo_operacao: 'saida_individual' })
+            body: JSON.stringify({ ids: [id] })
         });
         
         if (!response.ok) {
@@ -181,12 +160,13 @@ async function gerarExcel() {
             if (row.style.display !== 'none') {
                 const cells = row.cells;
                 dados.push({
-                    op: cells[1].textContent.trim(),
-                    peca: cells[2].textContent.trim(),
-                    projeto: cells[3].textContent.trim(),
-                    veiculo: cells[4].textContent.trim(),
-                    local: cells[5].textContent.trim(),
-                    camada: cells[6].textContent.trim()
+                    op_pai: cells[1].textContent.trim(),
+                    op: cells[2].textContent.trim(),
+                    peca: cells[3].textContent.trim(),
+                    projeto: cells[4].textContent.trim(),
+                    veiculo: cells[5].textContent.trim(),
+                    local: cells[6].textContent.trim(),
+                    rack: cells[7].textContent.trim()
                 });
             }
         });
@@ -215,38 +195,37 @@ async function gerarExcel() {
     }
 }
 
-function atualizarBotaoSaida() {
-    const checkboxesSelecionados = document.querySelectorAll('.row-checkbox:checked');
-    const btnSaida = document.getElementById('btnSaidaSelecionadas');
-    const contador = document.getElementById('contadorSelecionadas');
-    
-    if (checkboxesSelecionados.length > 0) {
-        btnSaida.style.display = 'inline-block';
-        contador.textContent = checkboxesSelecionados.length;
-    } else {
-        btnSaida.style.display = 'none';
-    }
-}
+const toggleAll = () => {
+    const selectAll = document.getElementById('selectAll');
+    // Selecionar apenas checkboxes visíveis (não filtrados)
+    document.querySelectorAll('.row-checkbox').forEach(cb => {
+        const row = cb.closest('tr');
+        if (row && row.style.display !== 'none') {
+            cb.checked = selectAll.checked;
+        }
+    });
+};
 
-async function saidaSelecionadas() {
-    const checkboxes = document.querySelectorAll('.row-checkbox:checked');
+async function saidaMassiva() {
+    // Buscar apenas checkboxes selecionados que estão visíveis (não filtrados)
+    const checkboxes = Array.from(document.querySelectorAll('.row-checkbox:checked')).filter(cb => {
+        const row = cb.closest('tr');
+        return row && row.style.display !== 'none';
+    });
     
     if (checkboxes.length === 0) return showPopup('Selecione pelo menos uma peça para dar saída.', true);
     
-    // Alerta específico para saída massiva
-    alert(`ATENÇÃO: Você está realizando uma SAÍDA MASSIVA de ${checkboxes.length} peça(s).\n\nEsta operação será registrada nos logs como "saída massiva".`);
-    
-    if (!confirm(`Confirma a saída massiva de ${checkboxes.length} peça(s) do estoque?`)) return;
+    if (!confirm(`Confirma a saída de ${checkboxes.length} peça(s) do estoque?`)) return;
     
     try {
-        const ids = Array.from(checkboxes).map(cb => parseInt(cb.dataset.id));
+        const ids = checkboxes.map(cb => parseInt(cb.dataset.id));
         
         const response = await fetch('/api/remover-estoque', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ ids, tipo_operacao: 'saida_massiva' })
+            body: JSON.stringify({ ids })
         });
         
         if (!response.ok) {
@@ -259,14 +238,12 @@ async function saidaSelecionadas() {
         
         if (result.success) {
             await carregarEstoque();
-            atualizarBotaoSaida();
         }
         
     } catch (error) {
         console.error('Erro:', error);
         showPopup(`${checkboxes.length} peça(s) removida(s) com sucesso!`, false);
         await carregarEstoque();
-        atualizarBotaoSaida();
     }
 }
 
