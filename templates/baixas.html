@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Peças em Baixa - Sistema PC</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="{{ url_for('static', filename='js/protection.js') }}"></script>
+</head>
+<body class="bg-gray-100 pt-6">
+    {% include 'navbar.html' %}
+    
+    <div class="container mx-auto px-4">
+        <div class="container-quadrado">
+            <div class="bg-white rounded-b-3xl shadow-3xl overflow-hidden animate-fade-in border border-gray-200 border-t-0">
+                <!-- Header -->
+                <div class="header-compact text-center">
+                    <h1 class="text-2xl font-bold text-black mb-2">Peças em Baixa</h1>
+                    <div class="flex justify-center items-center gap-4">
+                    </div>
+                </div>
+
+                <!-- Cards de Estatísticas -->
+                <div class="p-6 md:p-8 w-full">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                        <!-- Total de Baixas -->
+                        <div class="card-estatistica">
+                            <div class="card-icon bg-red-100">
+                                <i class="fas fa-exclamation-triangle text-red-600"></i>
+                            </div>
+                            <div class="card-content">
+                                <p class="card-label">Total de Baixas</p>
+                                <p id="totalBaixas" class="card-value text-gray-900">0</p>
+                            </div>
+                        </div>
+
+                        <!-- Baixas Pendentes -->
+                        <div class="card-estatistica">
+                            <div class="card-icon bg-yellow-100">
+                                <i class="fas fa-clock text-yellow-600"></i>
+                            </div>
+                            <div class="card-content">
+                                <p class="card-label">Pendentes</p>
+                                <p id="baixasPendentes" class="card-value text-yellow-600">0</p>
+                            </div>
+                        </div>
+
+                        <!-- Baixas Processadas -->
+                        <div class="card-estatistica">
+                            <div class="card-icon bg-green-100">
+                                <i class="fas fa-check-circle text-green-600"></i>
+                            </div>
+                            <div class="card-content">
+                                <p class="card-label">Processadas</p>
+                                <p id="baixasProcessadas" class="card-value text-green-600">0</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Conteúdo -->
+                    <div class="bg-white rounded-xl border border-gray-200 p-4 md:p-6 shadow-sm animate-fade-in w-full">
+                        
+                        <!-- Pesquisa -->
+                        <div class="bg-gray-50 rounded-xl p-6 mb-6">
+                            <div class="flex justify-center">
+                                <input type="text" id="campoPesquisaBaixas" placeholder="Pesquisar OP, Peça, Motivo..." 
+                                       class="form-input-large w-96"
+                                       oninput="filtrarTabelaBaixas()">
+                            </div>
+                        </div>
+
+                        <!-- Tabela de Baixas -->
+                        <div>
+                            <table id="tabela-baixas" class="w-full border-collapse">
+                                <thead>
+                                    <tr class="bg-gray-50">
+                                        <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(0)">OP</th>
+                                        <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(1)">PEÇA</th>
+                                        <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(2)">PROJETO</th>
+                                        <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(3)">MOTIVO</th>
+                                        <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(4)">DATA BAIXA</th>
+                                        <th class="border border-gray-200 px-4 py-3 text-center text-sm font-semibold text-gray-700 sortable" onclick="sortTable(5)">STATUS</th>
+                                        <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(6)">USUÁRIO</th>
+                                        <th class="border border-gray-200 px-4 py-3 text-center text-sm font-semibold text-gray-700">AÇÃO</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="baixas-tbody">
+                                    <tr>
+                                        <td colspan="8" class="border border-gray-200 px-4 py-6 text-center text-gray-500">
+                                            Carregando baixas...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/baixas.js') }}"></script>
+</body>
+</html>

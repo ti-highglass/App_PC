@@ -1,16 +1,21 @@
-version: '3.8'
-
 services:
-  sistema-pu:
+  sistema-pc:
     build: .
+    container_name: app-pc
+    image: app-pc
     ports:
-      - "9993:9993"
+      - "${PORT:-5001}:${PORT:-5001}"
+      - "5002:5002"
     environment:
-      - DB_HOST=${DB_HOST}
-      - DB_USER=${DB_USER}
-      - DB_PSW=${DB_PSW}
-      - DB_PORT=${DB_PORT}
-      - DB_NAME=${DB_NAME}
+      - FLASK_ENV=production
+      - PYTHONPATH=/app
+      - PORT=${PORT:-5001}
+      - GUNICORN_WORKERS=${GUNICORN_WORKERS:-2}
+      - GUNICORN_WORKER_CLASS=${GUNICORN_WORKER_CLASS:-gthread}
+      - GUNICORN_THREADS=${GUNICORN_THREADS:-4}
+      - GUNICORN_TIMEOUT=${GUNICORN_TIMEOUT:-120}
+    env_file:
+      - .env
     volumes:
       - ./logs:/app/logs
     restart: unless-stopped

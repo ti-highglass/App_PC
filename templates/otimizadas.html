@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Peças Otimizadas - Sistema PU</title>
+    <title>Peças Otimizadas - Sistema PC</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <script src="{{ url_for('static', filename='js/protection.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/url-protection.js') }}"></script>
 </head>
 <body class="bg-gray-100 pt-6">
     {% include 'navbar.html' %}
@@ -31,9 +31,11 @@
                         <!-- Botões e pesquisa -->
                         <div class="bg-gray-50 rounded-xl p-6 mb-6">
                             <div class="flex justify-center gap-4 mb-4">
-                                <button id="btnEnviarEstoque" onclick="enviarParaEstoque()" class="btn-large bg-green-600 hover:bg-green-700 text-white">
+                                {% if current_user and current_user.setor != 'Produção' %}
+                                <button id="btnEnviarEstoque" type="button" class="btn-large btn-disabled" disabled aria-disabled="true">
                                     <i class="fas fa-check mr-2"></i> Enviar Cortadas para Estoque
                                 </button>
+                                {% endif %}
                                 <button id="btnExcluir" onclick="excluirOtimizadas()" class="btn-large bg-red-600 hover:bg-red-700 text-white">
                                     <i class="fas fa-trash mr-2"></i> Excluir Selecionadas
                                 </button>
@@ -53,21 +55,19 @@
                                         <th class="border border-gray-200 px-4 py-3 text-center">
                                             <input type="checkbox" id="selectAll" onchange="toggleAll()">
                                         </th>
-                                        <th class="border border-gray-200 px-4 py-3 text-left sortable" onclick="sortTable(1)">OP-PAI</th>
-                                        <th class="border border-gray-200 px-4 py-3 text-left sortable" onclick="sortTable(2)">OP</th>
-                                        <th class="border border-gray-200 px-4 py-3 text-left sortable" onclick="sortTable(3)">PEÇA</th>
-                                        <th class="border border-gray-200 px-4 py-3 text-left sortable" onclick="sortTable(4)">PROJETO</th>
-                                        <th class="border border-gray-200 px-4 py-3 text-left sortable" onclick="sortTable(5)">VEÍCULO</th>
-                                        <th class="border border-gray-200 px-4 py-3 text-left sortable" onclick="sortTable(6)">LOCAL</th>
-                                        <th class="border border-gray-200 px-4 py-3 text-left sortable" onclick="sortTable(7)">RACK</th>
-                                        <th class="border border-gray-200 px-4 py-3 text-left sortable" onclick="sortTable(8)">CAMADA</th>
-                                        <th class="border border-gray-200 px-4 py-3 text-center sortable" onclick="sortTable(9)">STATUS</th>
+                                        <th class="border border-gray-200 px-4 py-3 text-left sortable" onclick="sortTable(1)">OP</th>
+                                        <th class="border border-gray-200 px-4 py-3 text-left sortable" onclick="sortTable(2)">PEÇA</th>
+                                        <th class="border border-gray-200 px-4 py-3 text-left sortable" onclick="sortTable(3)">PROJETO</th>
+                                        <th class="border border-gray-200 px-4 py-3 text-left sortable" onclick="sortTable(4)">VEÍCULO</th>
+                                        <th class="border border-gray-200 px-4 py-3 text-left sortable" onclick="sortTable(5)">LOCAL</th>
+                                        <th class="border border-gray-200 px-4 py-3 text-left sortable" onclick="sortTable(6)">SENSOR</th>
+                                        <th class="border border-gray-200 px-4 py-3 text-center sortable" onclick="sortTable(7)">DATA CORTE</th>
                                         <th class="border border-gray-200 px-4 py-3 text-center">AÇÃO</th>
                                     </tr>
                                 </thead>
                                 <tbody id="otimizadas-tbody">
                                     <tr>
-                                        <td colspan="11" class="border border-gray-200 px-4 py-6 text-center text-gray-500">
+                                        <td colspan="9" class="border border-gray-200 px-4 py-6 text-center text-gray-500">
                                             Carregando peças otimizadas...
                                         </td>
                                     </tr>
@@ -80,6 +80,40 @@
         </div>
     </div>
 
+    <!-- Modal de Baixa -->
+    <div id="modalBaixa" class="modal-baixa">
+        <div class="modal-baixa-content">
+            <div class="modal-baixa-header">
+                <h3>Baixa de Peça</h3>
+                <button type="button" onclick="fecharModalBaixa()" class="modal-close-btn">&times;</button>
+            </div>
+            <form id="formBaixa">
+                <input type="hidden" id="baixaPecaId">
+                <div class="modal-baixa-body">
+                    <label class="modal-label">Motivo da Baixa:</label>
+                    <select id="motivoBaixa" class="form-input-large" required>
+                        <option value="">Selecione o motivo...</option>
+                        <option value="Risco">Risco</option>
+                        <option value="Arquivo desatualizado">Arquivo desatualizado</option>
+                        <option value="Chapa Correu no Corte">Chapa Correu no Corte</option>
+                        <option value="Risco por estilete">Risco por estilete</option>
+                        <option value="Risco por Usinagem">Risco por Usinagem</option>
+                        <option value="Modelo de sensor errado">Modelo de sensor errado</option>
+                        <option value="Quebra">Quebra</option>
+                    </select>
+                </div>
+                <div class="modal-baixa-footer">
+                    <button type="button" onclick="fecharModalBaixa()" class="btn-modal btn-cancelar">Cancelar</button>
+                    <button type="submit" class="btn-modal btn-confirmar">Confirmar Baixa</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Disponibilizar informações do usuário para o JavaScript
+        window.userSetor = '{{ current_user.setor if current_user else "" }}';
+    </script>
     <script src="{{ url_for('static', filename='js/otimizadas.js') }}"></script>
 </body>
 </html>

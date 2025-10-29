@@ -1,28 +1,17 @@
-let paginaAtual = 1;
-let totalPaginas = 1;
-
 document.addEventListener('DOMContentLoaded', function() {
     carregarSaidas();
 });
 
-async function carregarSaidas(pagina = 1) {
+async function carregarSaidas() {
     try {
-        const response = await fetch(`/api/saidas?page=${pagina}&limit=20`);
-        const result = await response.json();
+        const response = await fetch('/api/saidas');
+        const dados = await response.json();
         
         const tbody = document.getElementById('saidas-tbody');
         tbody.innerHTML = '';
         
-        if (result.error) {
-            tbody.innerHTML = `<tr><td colspan="9" class="border border-gray-200 px-4 py-6 text-center text-red-500">Erro: ${result.error}</td></tr>`;
-            return;
-        }
-        
-        const dados = result.dados || [];
-        
-        if (dados.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="9" class="border border-gray-200 px-4 py-6 text-center text-gray-500">Nenhuma saída registrada</td></tr>';
-            document.getElementById('paginacao').style.display = 'none';
+        if (!dados || dados.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="border border-gray-200 px-4 py-6 text-center text-gray-500">Nenhuma saída registrada</td></tr>';
             return;
         }
         
@@ -30,154 +19,73 @@ async function carregarSaidas(pagina = 1) {
             const row = tbody.insertRow();
             row.className = 'hover:bg-gray-50';
             
-            const cells = [
-                item.op_pai || '-',
-                item.op || '-',
-                item.peca || '-',
-                item.projeto || '-',
-                item.veiculo || '-',
-                item.local || '-',
-                item.rack || '-',
-                item.usuario || '-',
-                item.data ? new Date(item.data).toLocaleDateString('pt-BR') : '-'
-            ];
-            
-            cells.forEach(value => {
+            [item.op, item.peca, item.projeto, item.veiculo, item.local, item.usuario, item.data].forEach(value => {
                 const cell = row.insertCell();
-                cell.textContent = value;
+                cell.textContent = value || '-';
                 cell.className = 'border border-gray-200 px-4 py-3 text-sm text-gray-700';
             });
+            
+            const acaoCell = row.insertCell();
+            acaoCell.className = 'border border-gray-200 px-4 py-3 text-center';
+            acaoCell.innerHTML = `
+                <button onclick="voltarEstoque(${item.id})" class="btn-green" title="Voltar para o estoque">
+                    <i class="fas fa-undo mr-1"></i>Voltar
+                </button>
+            `;
         });
         
-        if (result.pagination) {
-            paginaAtual = result.pagination.current_page;
-            totalPaginas = result.pagination.total_pages;
-            
-            document.getElementById('infoPagina').textContent = `Página ${paginaAtual} de ${totalPaginas}`;
-            document.getElementById('btnAnterior').disabled = paginaAtual <= 1;
-            document.getElementById('btnProximo').disabled = paginaAtual >= totalPaginas;
-            
-            document.getElementById('paginacao').style.display = totalPaginas > 1 ? 'flex' : 'none';
-        }
-        
     } catch (error) {
-        console.error('Erro:', error);
+        console.error('Erro ao carregar saídas:', error);
         const tbody = document.getElementById('saidas-tbody');
-        tbody.innerHTML = '<tr><td colspan="9" class="border border-gray-200 px-4 py-6 text-center text-red-500">Erro ao carregar saídas</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="border border-gray-200 px-4 py-6 text-center text-red-500">Erro ao carregar dados das saídas</td></tr>';
     }
 }
 
-function mudarPagina(direcao) {
-    const novaPagina = paginaAtual + direcao;
-    if (novaPagina >= 1 && novaPagina <= totalPaginas) {
-        carregarSaidas(novaPagina);
-    }
-}
-
-function filtrarTabelaSaidas() {
-    const filtro = document.getElementById('campoPesquisaSaidas').value.toLowerCase();
-    const linhas = document.querySelectorAll('#saidas-tbody tr');
-    linhas.forEach(linha => {
-        const textoLinha = linha.textContent.toLowerCase();
-        linha.style.display = textoLinha.includes(filtro) ? '' : 'none';
-    });
-}
-
-let sortDirection = {};
-
-const sortTable = (columnIndex) => {
-    const table = document.getElementById('tabela-saidas');
-    const tbody = table.querySelector('tbody');
-    const rows = Array.from(tbody.querySelectorAll('tr'));
+async function voltarEstoque(id) {
+    if (!confirm('Confirma que deseja retornar esta peça ao estoque?')) return;
     
-    if (rows.length === 0 || rows[0].cells.length <= columnIndex) return;
-    
-    const isAsc = !sortDirection[columnIndex];
-    sortDirection[columnIndex] = isAsc;
-    
-    document.querySelectorAll('th.sortable').forEach(th => {
-        th.classList.remove('sort-asc', 'sort-desc');
-    });
-    
-    const currentHeader = document.querySelectorAll('th.sortable')[columnIndex];
-    currentHeader.classList.add(isAsc ? 'sort-asc' : 'sort-desc');
-    
-    rows.sort((a, b) => {
-        const aText = a.cells[columnIndex]?.textContent.trim() || '';
-        const bText = b.cells[columnIndex]?.textContent.trim() || '';
-        
-        if (columnIndex === 8) {
-            const aDate = new Date(aText);
-            const bDate = new Date(bText);
-            if (!isNaN(aDate) && !isNaN(bDate)) {
-                return isAsc ? aDate - bDate : bDate - aDate;
-            }
-        }
-        
-        const aNum = parseFloat(aText);
-        const bNum = parseFloat(bText);
-        
-        if (!isNaN(aNum) && !isNaN(bNum)) {
-            return isAsc ? aNum - bNum : bNum - aNum;
-        }
-        
-        return isAsc ? aText.localeCompare(bText) : bText.localeCompare(aText);
-    });
-    
-    rows.forEach(row => tbody.appendChild(row));
-};
-
-async function gerarExcel() {
     try {
-        const tbody = document.getElementById('saidas-tbody');
-        const rows = tbody.querySelectorAll('tr');
-        
-        if (rows.length === 0 || rows[0].cells[0].textContent.includes('Carregando') || rows[0].cells[0].textContent.includes('Nenhum')) {
-            showPopup('Nenhum dado para exportar', true);
-            return;
-        }
-        
-        const dados = [];
-        rows.forEach(row => {
-            if (row.style.display !== 'none') {
-                const cells = row.cells;
-                dados.push({
-                    op_pai: cells[0].textContent.trim(),
-                    op: cells[1].textContent.trim(),
-                    peca: cells[2].textContent.trim(),
-                    projeto: cells[3].textContent.trim(),
-                    veiculo: cells[4].textContent.trim(),
-                    local: cells[5].textContent.trim(),
-                    rack: cells[6].textContent.trim(),
-                    usuario: cells[7].textContent.trim(),
-                    data: cells[8].textContent.trim()
-                });
-            }
+        const response = await fetch('/api/voltar-estoque', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id })
         });
         
-        if (dados.length === 0) {
-            showPopup('Nenhum dado filtrado para exportar', true);
-            return;
+        const result = await response.json();
+        
+        if (result.success) {
+            showPopup(result.message);
+            await carregarSaidas();
+        } else {
+            showPopup(result.message, true);
         }
-        
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = '/api/gerar-excel-saidas';
-        
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = 'dados';
-        input.value = JSON.stringify(dados);
-        
-        form.appendChild(input);
-        document.body.appendChild(form);
-        form.submit();
-        document.body.removeChild(form);
-        
     } catch (error) {
-        showPopup('Erro ao gerar Excel: ' + error.message, true);
+        showPopup('Erro ao retornar peça ao estoque: ' + error.message, true);
     }
 }
+
+const filtrarTabelaSaidas = () => {
+    const filtro = document.getElementById('campoPesquisaSaidas').value.toLowerCase();
+    document.querySelectorAll('#saidas-tbody tr').forEach(linha => {
+        const cells = linha.querySelectorAll('td');
+        let match = false;
+        
+        if (cells.length > 1) {
+            const op = cells[0].textContent.toLowerCase();
+            const peca = cells[1].textContent.toLowerCase();
+            
+            // Buscar por peça+op+camada (formato: TSP12345PC)
+            const pecaOpCamada = `${peca}${op}pc`;
+            
+            match = linha.textContent.toLowerCase().includes(filtro) ||
+                   pecaOpCamada.includes(filtro);
+        } else {
+            match = linha.textContent.toLowerCase().includes(filtro);
+        }
+        
+        linha.style.display = match ? '' : 'none';
+    });
+};
 
 function showPopup(message, isError = false) {
     const notification = document.createElement('div');
@@ -215,3 +123,88 @@ function showPopup(message, isError = false) {
         style.remove();
     }, 3000);
 }
+
+async function gerarExcel() {
+    try {
+        const tbody = document.getElementById('saidas-tbody');
+        const rows = tbody.querySelectorAll('tr');
+        
+        if (rows.length === 0 || rows[0].cells[0].textContent.includes('Carregando') || rows[0].cells[0].textContent.includes('Nenhuma')) {
+            showPopup('Nenhum dado para exportar', true);
+            return;
+        }
+        
+        const dados = [];
+        rows.forEach(row => {
+            if (row.style.display !== 'none') {
+                const cells = row.cells;
+                dados.push({
+                    op: cells[0].textContent.trim(),
+                    peca: cells[1].textContent.trim(),
+                    projeto: cells[2].textContent.trim(),
+                    veiculo: cells[3].textContent.trim(),
+                    local: cells[4].textContent.trim(),
+                    usuario: cells[5].textContent.trim(),
+                    data: cells[6].textContent.trim()
+                });
+            }
+        });
+        
+        if (dados.length === 0) {
+            showPopup('Nenhum dado filtrado para exportar', true);
+            return;
+        }
+        
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/api/gerar-excel-saidas';
+        
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'dados';
+        input.value = JSON.stringify(dados);
+        
+        form.appendChild(input);
+        document.body.appendChild(form);
+        form.submit();
+        document.body.removeChild(form);
+        
+    } catch (error) {
+        showPopup('Erro ao gerar Excel: ' + error.message, true);
+    }
+}
+
+const sortTable = (columnIndex) => {
+    const table = document.getElementById('tabela-saidas');
+    const tbody = table.querySelector('tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    
+    if (rows.length === 0 || rows[0].cells.length <= columnIndex) return;
+    
+    const isAsc = !window.sortDirection || !window.sortDirection[columnIndex];
+    window.sortDirection = window.sortDirection || {};
+    window.sortDirection[columnIndex] = isAsc;
+    
+    document.querySelectorAll('th.sortable').forEach(th => {
+        th.classList.remove('sort-asc', 'sort-desc');
+    });
+    
+    const currentHeader = document.querySelectorAll('th.sortable')[columnIndex];
+    currentHeader.classList.add(isAsc ? 'sort-asc' : 'sort-desc');
+    
+    rows.sort((a, b) => {
+        const aText = a.cells[columnIndex]?.textContent.trim() || '';
+        const bText = b.cells[columnIndex]?.textContent.trim() || '';
+        
+        const aNum = parseFloat(aText);
+        const bNum = parseFloat(bText);
+        
+        if (!isNaN(aNum) && !isNaN(bNum)) {
+            return isAsc ? aNum - bNum : bNum - aNum;
+        }
+        
+        return isAsc ? aText.localeCompare(bText) : bText.localeCompare(aText);
+    });
+    
+    rows.forEach(row => tbody.appendChild(row));
+};

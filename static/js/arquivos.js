@@ -36,7 +36,7 @@ function renderizarTabela(dados) {
     const tbody = document.getElementById('arquivos-tbody');
     
     if (dados.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="9" class="border border-gray-200 px-4 py-6 text-center text-gray-500">Nenhum arquivo encontrado</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="border border-gray-200 px-4 py-6 text-center text-gray-500">Nenhum arquivo encontrado</td></tr>';
         return;
     }
     
@@ -44,8 +44,9 @@ function renderizarTabela(dados) {
         <tr class="hover:bg-gray-50">
             <td class="border border-gray-200 px-4 py-3">${arquivo.projeto || '-'}</td>
             <td class="border border-gray-200 px-4 py-3">${arquivo.peca || '-'}</td>
-            <td class="border border-gray-200 px-4 py-3">${arquivo.nome_peca || '-'}</td>
+            <td class="border border-gray-200 px-4 py-3" title="${arquivo.nome_peca || '-'}">${(arquivo.nome_peca || '-').length > 30 ? (arquivo.nome_peca || '-').substring(0, 30) + '...' : (arquivo.nome_peca || '-')}</td>
             <td class="border border-gray-200 px-4 py-3">${arquivo.camada || '-'}</td>
+            <td class="border border-gray-200 px-4 py-3">${arquivo.sensor || 'A'}</td>
             <td class="border border-gray-200 px-4 py-3">${arquivo.espessura || '-'}</td>
             <td class="border border-gray-200 px-4 py-3">${arquivo.quantidade || '-'}</td>
             <td class="border border-gray-200 px-4 py-3 text-center">
@@ -86,7 +87,7 @@ function sortTable(columnIndex) {
     }
     
     // Ordenar dados
-    const colunas = ['projeto', 'peca', 'nome_peca', 'camada', 'espessura', 'quantidade'];
+    const colunas = ['projeto', 'peca', 'nome_peca', 'camada', 'sensor', 'espessura', 'quantidade'];
     const coluna = colunas[columnIndex];
     
     const dadosOrdenados = [...arquivosCache].sort((a, b) => {
@@ -131,6 +132,7 @@ function editarArquivo(id) {
     document.getElementById('inputCamada').value = arquivo.camada || '';
     document.getElementById('inputEspessura').value = arquivo.espessura || '';
     document.getElementById('inputQuantidade').value = arquivo.quantidade || '';
+    document.getElementById('inputSensor').value = arquivo.sensor || '';
     
     document.getElementById('modalArquivo').style.display = 'flex';
 }
@@ -150,6 +152,7 @@ function salvarArquivo() {
         camada: document.getElementById('inputCamada').value.trim(),
         espessura: parseFloat(document.getElementById('inputEspessura').value) || null,
         quantidade: parseInt(document.getElementById('inputQuantidade').value) || null,
+        sensor: document.getElementById('inputSensor').value.trim()
     };
     
     // Validar campos obrigatórios

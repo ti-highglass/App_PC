@@ -1,38 +1,104 @@
-document.addEventListener('DOMContentLoaded', () => {
-    // Carregar datas salvas ou definir padrão
-    const dataInicio = localStorage.getItem('dataInicio');
-    const dataFim = localStorage.getItem('dataFim');
-    const etapa = localStorage.getItem('etapa');
-    const timestamp = localStorage.getItem('datasTimestamp');
-    
-    const agora = Date.now();
-    const cincoMinutos = 5 * 60 * 1000;
-    
-    // Se passou mais de 5 minutos, resetar
-    if (!timestamp || (agora - parseInt(timestamp)) > cincoMinutos) {
-        const dataAtual = new Date();
-        dataAtual.setHours(dataAtual.getHours() - 3);
-        document.getElementById('dataFim').value = dataAtual.toISOString().slice(0, 16);
-        document.getElementById('etapa').value = 'FILA';
+let todosLotes = [];
+
+document.addEventListener('DOMContentLoaded', async () => {
+    // Carregar lotes
+    try {
+        console.log('Iniciando carregamento de lotes...');
+        const response = await fetch('/api/lotes');
+        console.log('Response status:', response.status);
         
-        localStorage.setItem('datasTimestamp', agora.toString());
-    } else {
-        // Restaurar valores salvos
-        if (dataInicio) document.getElementById('dataInicio').value = dataInicio;
-        if (dataFim) document.getElementById('dataFim').value = dataFim;
-        if (etapa) document.getElementById('etapa').value = etapa;
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const lotes = await response.json();
+        console.log('Lotes recebidos:', lotes);
+        
+        todosLotes = lotes;
+        preencherOpcoesLotes(lotes);
+        
+    } catch (error) {
+        console.error('Erro ao carregar lotes:', error);
     }
     
-    // Salvar quando mudar
-    ['dataInicio', 'dataFim', 'etapa'].forEach(id => {
-        document.getElementById(id).addEventListener('change', () => {
-            localStorage.setItem('dataInicio', document.getElementById('dataInicio').value);
-            localStorage.setItem('dataFim', document.getElementById('dataFim').value);
-            localStorage.setItem('etapa', document.getElementById('etapa').value);
-            localStorage.setItem('datasTimestamp', Date.now().toString());
-        });
+    // Carregar contador de locais
+    carregarContadorLocais();
+    
+    // Fechar dropdown ao clicar fora
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.dropdown-container')) {
+            fecharDropdown();
+        }
     });
 });
+
+function preencherOpcoesLotes(lotes) {
+    const loteOptions = document.getElementById('loteOptions');
+    loteOptions.innerHTML = '<div class="dropdown-option" data-value="" onclick="selecionarLote(\'\', \'Selecionar lote\')">Selecionar lote</div>';
+    
+    if (lotes && lotes.length > 0) {
+        lotes.forEach(lote => {
+            const option = document.createElement('div');
+            option.className = 'dropdown-option';
+            option.setAttribute('data-value', lote.id_lote);
+            option.textContent = lote.display;
+            option.onclick = () => selecionarLote(lote.id_lote, lote.display);
+            loteOptions.appendChild(option);
+        });
+        console.log('Lotes adicionados ao dropdown:', lotes.length);
+    } else {
+        console.log('Nenhum lote encontrado');
+    }
+}
+
+function toggleDropdown() {
+    const dropdown = document.getElementById('loteDropdown');
+    const container = document.querySelector('.dropdown-container');
+    
+    if (dropdown.style.display === 'none' || !dropdown.style.display) {
+        dropdown.style.display = 'block';
+        container.classList.add('open');
+        document.getElementById('loteFilter').focus();
+    } else {
+        fecharDropdown();
+    }
+}
+
+function fecharDropdown() {
+    const dropdown = document.getElementById('loteDropdown');
+    const container = document.querySelector('.dropdown-container');
+    dropdown.style.display = 'none';
+    container.classList.remove('open');
+    document.getElementById('loteFilter').value = '';
+    preencherOpcoesLotes(todosLotes);
+}
+
+function selecionarLote(valor, texto) {
+    document.getElementById('lote').value = valor;
+    document.getElementById('loteSearch').value = texto;
+    
+    // Atualizar seleção visual
+    document.querySelectorAll('.dropdown-option').forEach(opt => {
+        opt.classList.remove('selected');
+    });
+    
+    const optionSelecionada = document.querySelector(`[data-value="${valor}"]`);
+    if (optionSelecionada) {
+        optionSelecionada.classList.add('selected');
+    }
+    
+    fecharDropdown();
+    localStorage.setItem('lote', valor);
+}
+
+function filtrarLotes() {
+    const filtro = document.getElementById('loteFilter').value.toLowerCase();
+    const lotesFiltrados = todosLotes.filter(lote => 
+        lote.display.toLowerCase().includes(filtro) || 
+        lote.id_lote.toLowerCase().includes(filtro)
+    );
+    preencherOpcoesLotes(lotesFiltrados);
+}
 
 async function coletarDados() {
     const tbody = document.getElementById('dados-tbody');
@@ -57,15 +123,11 @@ async function coletarDados() {
         tbody.innerHTML = '<tr><td colspan="10" class="border border-gray-200 px-4 py-6 text-center text-gray-500">Carregando dados...</td></tr>';
         btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Carregando...';
         const params = new URLSearchParams();
-        const dataInicio = document.getElementById('dataInicio').value;
-        const dataFim = document.getElementById('dataFim').value;
-        const etapa = document.getElementById('etapa').value;
+        const lote = document.getElementById('lote').value;
         
-        console.log('Etapa selecionada:', etapa);
+        console.log('Lote selecionado:', lote);
         
-        if (dataInicio) params.append('data_inicio', dataInicio);
-        if (dataFim) params.append('data_fim', dataFim);
-        params.append('etapa', etapa);
+        if (lote) params.append('lote', lote);
         
         const url = '/api/dados' + (params.toString() ? '?' + params.toString() : '');
         console.log('URL da requisição:', url);
@@ -85,12 +147,14 @@ async function coletarDados() {
             const row = tbody.insertRow();
             row.className = 'hover:bg-gray-50';
             row.setAttribute('data-row-id', index);
+            row.setAttribute('data-lote-vd', item.lote_vd || '');
+            row.setAttribute('data-lote-pc', item.lote_pc || '');
             
             const checkCell = row.insertCell();
             checkCell.innerHTML = `<input type="checkbox" class="row-checkbox" data-index="${index}" onchange="atualizarContador()">`;
             checkCell.className = 'border border-gray-200 px-4 py-3 text-center';
             
-            [item.op_pai, item.op, item.peca, item.projeto, item.veiculo, item.local, item.rack].forEach(value => {
+            [item.op, item.peca, item.projeto, item.veiculo, item.local, item.sensor].forEach(value => {
                 const cell = row.insertCell();
                 cell.textContent = value || '-';
                 cell.className = 'border border-gray-200 px-4 py-3';
@@ -107,13 +171,16 @@ async function coletarDados() {
             }
             
             const cellAcoes = row.insertCell();
-            cellAcoes.innerHTML = `<i onclick="deletarLinha(this)" class="fas fa-trash text-red-500 hover:text-red-700 cursor-pointer"></i>`;
+            cellAcoes.innerHTML = `
+                <i onclick="editarLinha(this)" class="fas fa-edit text-blue-500 hover:text-blue-700 cursor-pointer mr-2" title="Editar"></i>
+                <i onclick="deletarLinha(this)" class="fas fa-trash text-red-500 hover:text-red-700 cursor-pointer" title="Excluir"></i>
+            `;
             cellAcoes.className = 'border border-gray-200 px-4 py-3 text-center';
         });
         
     } catch (error) {
         console.error('Erro na coleta de dados:', error);
-        tbody.innerHTML = `<tr><td colspan="10" class="border border-gray-200 px-4 py-6 text-center text-gray-500">Erro ao carregar dados: ${error.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" class="border border-gray-200 px-4 py-6 text-center text-gray-500">Erro ao carregar dados: ${error.message}</td></tr>`;
     } finally {
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-sync mr-2"></i> Coletar Dados';
@@ -141,10 +208,54 @@ document.addEventListener('change', function(e) {
     }
 });
 
+// Listener para mudança do sensor no modal de edição
+document.getElementById('editSensor').addEventListener('input', async function() {
+    const sensor = this.value.trim();
+    const projeto = document.getElementById('editProjeto').value.trim();
+    const peca = document.getElementById('editPeca').value.trim();
+    
+    if (projeto && peca) {
+        try {
+            const response = await fetch(`/api/buscar-arquivo?projeto=${encodeURIComponent(projeto)}&peca=${encodeURIComponent(peca)}&sensor=${encodeURIComponent(sensor)}`);
+            if (response.ok) {
+                const result = await response.json();
+                const statusElement = document.getElementById('arquivoStatus');
+                if (statusElement) {
+                    if (result.encontrado) {
+                        statusElement.textContent = `✓ Arquivo encontrado: ${result.nome_arquivo}`;
+                        statusElement.style.color = '#16a34a';
+                    } else {
+                        statusElement.textContent = '✗ Arquivo não encontrado';
+                        statusElement.style.color = '#dc2626';
+                    }
+                }
+            }
+        } catch (error) {
+            console.log('Erro ao buscar arquivo:', error);
+        }
+    }
+});
+
 const filtrarTabela = () => {
     const filtro = document.getElementById('campoPesquisa').value.toLowerCase();
     document.querySelectorAll('#dados-tbody tr').forEach(linha => {
-        linha.style.display = linha.textContent.toLowerCase().includes(filtro) ? '' : 'none';
+        const cells = linha.querySelectorAll('td');
+        if (cells.length > 1) {
+            const op = cells[1].textContent.toLowerCase();
+            const peca = cells[2].textContent.toLowerCase();
+            const projeto = cells[3].textContent.toLowerCase();
+            const veiculo = cells[4].textContent.toLowerCase();
+            const local = cells[5].textContent.toLowerCase();
+            const sensor = cells[6].textContent.toLowerCase();
+            
+            // Buscar por peça+op+camada (formato: TSP12345PC)
+            const pecaOpCamada = `${peca}${op}pc`;
+            
+            const match = linha.textContent.toLowerCase().includes(filtro) ||
+                         pecaOpCamada.includes(filtro);
+            
+            linha.style.display = match ? '' : 'none';
+        }
     });
 };
 
@@ -159,16 +270,23 @@ async function otimizarPecas() {
     const checkboxes = document.querySelectorAll('.row-checkbox:checked');
     if (checkboxes.length === 0) return showPopup('Selecione pelo menos uma peça para otimizar.', true);
     
+    const dataCorte = document.getElementById('dataCorte').value;
+    if (!dataCorte) return showPopup('Selecione a data de corte.', true);
+    
     const pecasSelecionadas = Array.from(checkboxes).map(cb => {
-        const cells = cb.closest('tr').querySelectorAll('td');
+        const row = cb.closest('tr');
+        const cells = row.querySelectorAll('td');
         return {
-            op_pai: cells[1].textContent,
-            op: cells[2].textContent,
-            peca: cells[3].textContent,
-            projeto: cells[4].textContent,
-            veiculo: cells[5].textContent,
-            local: cells[6].textContent,
-            rack: cells[7].textContent
+            op: cells[1].textContent,
+            peca: cells[2].textContent,
+            projeto: cells[3].textContent,
+            veiculo: cells[4].textContent,
+            local: cells[5].textContent,
+            sensor: cells[6].textContent,
+            rack: 'SLOT',
+            lote_vd: row.getAttribute('data-lote-vd') || '',
+            lote_pc: row.getAttribute('data-lote-pc') || '',
+            data_corte: dataCorte
         };
     });
     
@@ -185,6 +303,7 @@ async function otimizarPecas() {
         
         if (result.success) {
             showPopup(result.message);
+            carregarContadorLocais(); // Atualizar contador após otimizar
             if (result.redirect) {
                 setTimeout(() => window.location.href = result.redirect, 1500);
             } else {
@@ -207,15 +326,18 @@ async function gerarXML() {
     if (checkboxes.length === 0) return showPopup('Selecione pelo menos um item para gerar o XML.', true);
     
     const pecasSelecionadas = Array.from(checkboxes).map(cb => {
-        const cells = cb.closest('tr').querySelectorAll('td');
+        const row = cb.closest('tr');
+        const cells = row.querySelectorAll('td');
         return {
-            op_pai: cells[1].textContent,
-            op: cells[2].textContent,
-            peca: cells[3].textContent,
-            projeto: cells[4].textContent,
-            veiculo: cells[5].textContent,
-            local: cells[6].textContent,
-            rack: cells[7].textContent
+            op: cells[1].textContent,
+            peca: cells[2].textContent,
+            projeto: cells[3].textContent,
+            veiculo: cells[4].textContent,
+            local: cells[5].textContent,
+            sensor: cells[6].textContent,
+            rack: 'SLOT',
+            lote_vd: row.getAttribute('data-lote-vd') || '',
+            lote_pc: row.getAttribute('data-lote-pc') || ''
         };
     });
     
@@ -271,15 +393,18 @@ function gerarExcel() {
     if (checkboxes.length === 0) return showPopup('Selecione pelo menos um item para gerar o Excel.', true);
     
     const pecasSelecionadas = Array.from(checkboxes).map(cb => {
-        const cells = cb.closest('tr').querySelectorAll('td');
+        const row = cb.closest('tr');
+        const cells = row.querySelectorAll('td');
         return {
-            op_pai: cells[1].textContent,
-            op: cells[2].textContent,
-            peca: cells[3].textContent,
-            projeto: cells[4].textContent,
-            veiculo: cells[5].textContent,
-            local: cells[6].textContent,
-            rack: cells[7].textContent
+            op: cells[1].textContent,
+            peca: cells[2].textContent,
+            projeto: cells[3].textContent,
+            veiculo: cells[4].textContent,
+            local: cells[5].textContent,
+            sensor: cells[6].textContent,
+            rack: 'SLOT',
+            lote_vd: row.getAttribute('data-lote-vd') || '',
+            lote_pc: row.getAttribute('data-lote-pc') || ''
         };
     });
     
@@ -334,11 +459,67 @@ const sortTable = (columnIndex) => {
 
 function abrirModalAdicionar() {
     document.getElementById('modalAdicionar').style.display = 'flex';
+    selecionarModo('manual');
 }
 
 function fecharModalAdicionar() {
     document.getElementById('modalAdicionar').style.display = 'none';
     document.getElementById('formAdicionar').reset();
+    document.getElementById('inputExcel').value = '';
+    document.getElementById('previewContainer').style.display = 'none';
+    document.getElementById('btnProcessarExcel').style.display = 'none';
+}
+
+function selecionarModo(modo) {
+    const btnManual = document.getElementById('btnManual');
+    const btnExcel = document.getElementById('btnExcelImport');
+    const modoManual = document.getElementById('modoManual');
+    const modoExcel = document.getElementById('modoExcel');
+    
+    if (modo === 'manual') {
+        btnManual.className = 'btn-modal btn-blue-modal';
+        btnExcel.className = 'btn-modal btn-gray';
+        modoManual.style.display = 'block';
+        modoExcel.style.display = 'none';
+    } else {
+        btnManual.className = 'btn-modal btn-gray';
+        btnExcel.className = 'btn-modal btn-blue-modal';
+        modoManual.style.display = 'none';
+        modoExcel.style.display = 'block';
+        configurarDragDrop();
+    }
+}
+
+function configurarDragDrop() {
+    const dropZone = document.getElementById('dropZone');
+    const inputExcel = document.getElementById('inputExcel');
+    
+    dropZone.addEventListener('click', () => inputExcel.click());
+    
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = '#3b82f6';
+        dropZone.style.backgroundColor = '#eff6ff';
+    });
+    
+    dropZone.addEventListener('dragleave', () => {
+        dropZone.style.borderColor = '#d1d5db';
+        dropZone.style.backgroundColor = 'transparent';
+    });
+    
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = '#d1d5db';
+        dropZone.style.backgroundColor = 'transparent';
+        
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            inputExcel.files = files;
+            previewExcel();
+        }
+    });
+    
+    inputExcel.addEventListener('change', previewExcel);
 }
 
 document.getElementById('formAdicionar').addEventListener('submit', async function(e) {
@@ -348,6 +529,7 @@ document.getElementById('formAdicionar').addEventListener('submit', async functi
     const peca = document.getElementById('inputPeca').value.trim();
     const projeto = document.getElementById('inputProjeto').value.trim();
     const veiculo = document.getElementById('inputVeiculo').value.trim();
+    const sensor = document.getElementById('inputSensor').value.trim();
     
     if (!op || !peca || !projeto || !veiculo) {
         showPopup('Todos os campos são obrigatórios', true);
@@ -358,7 +540,7 @@ document.getElementById('formAdicionar').addEventListener('submit', async functi
         const response = await fetch('/api/adicionar-peca-manual', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ op, peca, projeto, veiculo })
+            body: JSON.stringify({ op, peca, projeto, veiculo, sensor })
         });
         
         if (response.ok) {
@@ -374,7 +556,7 @@ document.getElementById('formAdicionar').addEventListener('submit', async functi
                 checkCell.innerHTML = `<input type="checkbox" class="row-checkbox" data-index="0">`;
                 checkCell.className = 'border border-gray-200 px-4 py-3 text-center';
                 
-                [result.peca.op_pai, result.peca.op, result.peca.peca, result.peca.projeto, result.peca.veiculo, result.peca.local, result.peca.rack].forEach(value => {
+                [result.peca.op, result.peca.peca, result.peca.projeto, result.peca.veiculo, result.peca.local, result.peca.sensor || sensor || '-'].forEach(value => {
                     const cell = row.insertCell();
                     cell.textContent = value || '-';
                     cell.className = 'border border-gray-200 px-4 py-3';
@@ -387,10 +569,14 @@ document.getElementById('formAdicionar').addEventListener('submit', async functi
                 arquivoCell.style.color = '#dc2626';
                 
                 const cellAcoes = row.insertCell();
-                cellAcoes.innerHTML = `<i onclick="deletarLinha(this)" class="fas fa-trash text-red-500 hover:text-red-700 cursor-pointer"></i>`;
+                cellAcoes.innerHTML = `
+                    <i onclick="editarLinha(this)" class="fas fa-edit text-blue-500 hover:text-blue-700 cursor-pointer mr-2" title="Editar"></i>
+                    <i onclick="deletarLinha(this)" class="fas fa-trash text-red-500 hover:text-red-700 cursor-pointer" title="Excluir"></i>
+                `;
                 cellAcoes.className = 'border border-gray-200 px-4 py-3 text-center';
                 
                 fecharModalAdicionar();
+                carregarContadorLocais(); // Atualizar contador após adicionar
                 showPopup('Peça adicionada com sucesso!');
             } else {
                 showPopup('Erro: ' + result.message, true);
@@ -475,7 +661,269 @@ function showPopup(message, isError = false) {
     document.body.appendChild(popupDiv);
 }
 
-// Garantir que o modal esteja fechado ao carregar
-document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('modalAdicionar').style.display = 'none';
+async function limparPecasManuais() {
+    if (!confirm('ATENÇÃO: Esta ação irá limpar todas as peças manuais da tabela pc_manuais.\n\nDeseja continuar?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/limpar-pecas-manuais', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showPopup(result.message);
+        } else {
+            showPopup(result.message, true);
+        }
+    } catch (error) {
+        showPopup('Erro ao limpar peças manuais: ' + error.message, true);
+    }
+}
+
+
+
+async function previewExcel() {
+    const fileInput = document.getElementById('inputExcel');
+    const file = fileInput.files[0];
+    
+    if (!file) return;
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    try {
+        showLoading('Processando arquivo Excel...');
+        
+        const response = await fetch('/api/importar-excel-pecas', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        hideLoading();
+        
+        if (result.success) {
+            mostrarPreview(result.pecas);
+            document.getElementById('btnProcessarExcel').disabled = false;
+        } else {
+            showPopup(result.message, true);
+        }
+    } catch (error) {
+        hideLoading();
+        showPopup('Erro ao processar arquivo: ' + error.message, true);
+    }
+}
+
+function mostrarPreview(pecas) {
+    const previewBody = document.getElementById('previewTableBody');
+    const previewContainer = document.getElementById('previewContainer');
+    const btnProcessar = document.getElementById('btnProcessarExcel');
+    
+    previewBody.innerHTML = '';
+    
+    pecas.slice(0, 10).forEach(peca => {
+        const row = previewBody.insertRow();
+        [peca.op, peca.peca, peca.projeto, peca.veiculo, peca.sensor, peca.local, peca.arquivo_status].forEach(value => {
+            const cell = row.insertCell();
+            cell.textContent = (value && value !== 'nan' && value !== 'NaN') ? value : '-';
+            cell.className = 'border px-2 py-1';
+        });
+    });
+    
+    previewContainer.style.display = 'block';
+    btnProcessar.style.display = 'inline-block';
+    
+    window.pecasImportadas = pecas;
+}
+
+async function processarExcel() {
+    if (!window.pecasImportadas || window.pecasImportadas.length === 0) {
+        showPopup('Nenhuma peça para processar', true);
+        return;
+    }
+    
+    try {
+        const tbody = document.getElementById('dados-tbody');
+        
+        if (tbody.children.length === 1 && tbody.children[0].children.length === 1) {
+            tbody.innerHTML = '';
+        }
+        
+        let adicionadas = 0;
+        
+        window.pecasImportadas.forEach((peca, index) => {
+            const row = tbody.insertRow();
+            row.className = 'hover:bg-gray-50';
+            row.setAttribute('data-row-id', tbody.children.length + index);
+            
+            const checkCell = row.insertCell();
+            checkCell.innerHTML = `<input type="checkbox" class="row-checkbox" data-index="${tbody.children.length + index}" onchange="atualizarContador()">`;
+            checkCell.className = 'border border-gray-200 px-4 py-3 text-center';
+            
+            [peca.op, peca.peca, peca.projeto, peca.veiculo, peca.local, peca.sensor].forEach(value => {
+                const cell = row.insertCell();
+                cell.textContent = (value && value !== 'nan' && value !== 'NaN') ? value : '-';
+                cell.className = 'border border-gray-200 px-4 py-3';
+            });
+            
+            const arquivoCell = row.insertCell();
+            arquivoCell.textContent = peca.arquivo_status || 'Sem arquivo de corte';
+            arquivoCell.className = 'border border-gray-200 px-4 py-3 text-center';
+            if (peca.arquivo_status === 'Sem arquivo de corte') {
+                arquivoCell.style.color = '#dc2626';
+            } else {
+                arquivoCell.style.color = '#16a34a';
+            }
+            
+            const cellAcoes = row.insertCell();
+            cellAcoes.innerHTML = `
+                <i onclick="editarLinha(this)" class="fas fa-edit text-blue-500 hover:text-blue-700 cursor-pointer mr-2" title="Editar"></i>
+                <i onclick="deletarLinha(this)" class="fas fa-trash text-red-500 hover:text-red-700 cursor-pointer" title="Excluir"></i>
+            `;
+            cellAcoes.className = 'border border-gray-200 px-4 py-3 text-center';
+            
+            adicionadas++;
+        });
+        
+        fecharModalAdicionar();
+        showPopup(`${adicionadas} peça(s) importada(s) com sucesso!`);
+        
+    } catch (error) {
+        showPopup('Erro ao processar peças: ' + error.message, true);
+    }
+}
+
+async function editarLinha(element) {
+    const row = element.closest('tr');
+    const cells = row.querySelectorAll('td');
+    
+    document.getElementById('editIndex').value = row.getAttribute('data-row-id') || row.rowIndex;
+    document.getElementById('editOP').value = cells[1].textContent;
+    document.getElementById('editPeca').value = cells[2].textContent;
+    document.getElementById('editProjeto').value = cells[3].textContent;
+    document.getElementById('editVeiculo').value = cells[4].textContent;
+    document.getElementById('editSensor').value = cells[6].textContent === '-' ? '' : cells[6].textContent;
+    
+    // Mostrar status atual do arquivo
+    const statusElement = document.getElementById('arquivoStatus');
+    const arquivoAtual = cells[7].textContent;
+    if (arquivoAtual === 'Sem arquivo de corte') {
+        statusElement.textContent = '✗ Nenhum arquivo encontrado';
+        statusElement.style.color = '#dc2626';
+    } else {
+        statusElement.textContent = `✓ Arquivo atual: ${arquivoAtual}`;
+        statusElement.style.color = '#16a34a';
+    }
+    
+    window.linhaEditando = row;
+    document.getElementById('modalEditar').style.display = 'flex';
+}
+
+function fecharModalEditar() {
+    document.getElementById('modalEditar').style.display = 'none';
+    document.getElementById('formEditar').reset();
+    window.linhaEditando = null;
+}
+
+document.getElementById('formEditar').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    if (!window.linhaEditando) return;
+    
+    const op = document.getElementById('editOP').value.trim();
+    const peca = document.getElementById('editPeca').value.trim();
+    const projeto = document.getElementById('editProjeto').value.trim();
+    const veiculo = document.getElementById('editVeiculo').value.trim();
+    const sensor = document.getElementById('editSensor').value.trim();
+    
+    if (!op || !peca || !projeto || !veiculo) {
+        showPopup('Todos os campos obrigatórios devem ser preenchidos', true);
+        return;
+    }
+    
+    // Buscar arquivo correspondente ao novo sensor
+    let arquivoStatus = 'Sem arquivo de corte';
+    try {
+        const arquivoResponse = await fetch(`/api/buscar-arquivo?projeto=${encodeURIComponent(projeto)}&peca=${encodeURIComponent(peca)}&sensor=${encodeURIComponent(sensor)}`);
+        if (arquivoResponse.ok) {
+            const arquivoResult = await arquivoResponse.json();
+            if (arquivoResult.encontrado) {
+                arquivoStatus = arquivoResult.nome_arquivo;
+            }
+        }
+    } catch (error) {
+        console.log('Erro ao buscar arquivo:', error);
+    }
+    
+    const cells = window.linhaEditando.querySelectorAll('td');
+    cells[1].textContent = op;
+    cells[2].textContent = peca;
+    cells[3].textContent = projeto;
+    cells[4].textContent = veiculo;
+    cells[6].textContent = sensor || '-';
+    
+    // Atualizar coluna de arquivo
+    const arquivoCell = cells[7];
+    arquivoCell.textContent = arquivoStatus;
+    if (arquivoStatus === 'Sem arquivo de corte') {
+        arquivoCell.style.color = '#dc2626';
+    } else {
+        arquivoCell.style.color = '#16a34a';
+    }
+    
+    fecharModalEditar();
+    showPopup('Peça editada com sucesso!');
 });
+
+// Função para carregar contador de locais
+async function carregarContadorLocais() {
+    try {
+        const [locaisResponse, contagemResponse] = await Promise.all([
+            fetch('/api/locais'),
+            fetch('/api/contagem-pecas-locais')
+        ]);
+        
+        if (locaisResponse.ok && contagemResponse.ok) {
+            const locais = await locaisResponse.json();
+            const contagem = await contagemResponse.json();
+            
+            // Criar mapa de ocupação
+            const ocupacaoMap = {};
+            contagem.forEach(item => {
+                ocupacaoMap[item.local] = item.total;
+            });
+            
+            let totalLocais = 0;
+            let locaisOcupados = 0;
+            let locaisDisponiveis = 0;
+            
+            locais.forEach(local => {
+                if (local.status === 'Ativo') {
+                    totalLocais++;
+                    const ocupacao = ocupacaoMap[local.local] || 0;
+                    const limite = parseInt(local.limite) || 6;
+                    
+                    if (ocupacao >= limite) {
+                        locaisOcupados++;
+                    } else {
+                        locaisDisponiveis++;
+                    }
+                }
+            });
+            
+            // Atualizar contadores na tela
+            document.getElementById('contadorLocaisDisponiveis').textContent = locaisDisponiveis;
+            document.getElementById('contadorLocaisOcupados').textContent = locaisOcupados;
+            document.getElementById('contadorTotalLocais').textContent = totalLocais;
+        }
+    } catch (error) {
+        console.error('Erro ao carregar contador de locais:', error);
+        document.getElementById('contadorLocaisDisponiveis').textContent = 'Erro';
+        document.getElementById('contadorLocaisOcupados').textContent = 'Erro';
+        document.getElementById('contadorTotalLocais').textContent = 'Erro';
+    }
+}

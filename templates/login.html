@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Sistema Alocação PU</title>
+    <title>Login - Sistema Alocação PC</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
@@ -11,7 +11,7 @@
     <div class="login-container">
         <div class="logo-container">
             <img src="{{ url_for('static', filename='img/logo_opera 2 (1).png') }}" alt="Opera Logo" class="logo" onerror="this.src='{{ url_for('static', filename='img/logo_opera 2 (1).png') }}'">
-            <h1 style="color: #333; font-size: 28px; font-weight: 700; margin: 0;">Otimização de PU</h1>
+            <h1 style="color: #333; font-size: 28px; font-weight: 700; margin: 0;">Otimização de PC</h1>
             <p style="color: #666; font-size: 16px; margin: 8px 0 0 0;">Faça login para continuar</p>
         </div>
         
@@ -33,7 +33,10 @@
             
             <div class="input-group">
                 <i class="fas fa-lock"></i>
-                <input type="password" name="password" placeholder="Digite sua senha" required>
+                <input type="password" id="password" name="password" placeholder="Digite sua senha" required>
+                <button type="button" class="toggle-password" onclick="togglePassword()">
+                    <i class="fas fa-eye" id="toggleIcon"></i>
+                </button>
             </div>
             
             <button type="submit" class="login-btn">
@@ -42,5 +45,22 @@
         </form>
         
     </div>
+    
+    <script>
+        function togglePassword() {
+            const passwordInput = document.getElementById('password');
+            const toggleIcon = document.getElementById('toggleIcon');
+            
+            if (passwordInput.type === 'password') {
+                passwordInput.type = 'text';
+                toggleIcon.classList.remove('fa-eye');
+                toggleIcon.classList.add('fa-eye-slash');
+            } else {
+                passwordInput.type = 'password';
+                toggleIcon.classList.remove('fa-eye-slash');
+                toggleIcon.classList.add('fa-eye');
+            }
+        }
+    </script>
 </body>
 </html>

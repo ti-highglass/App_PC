@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gerenciamento de Locais - Sistema PU</title>
+    <title>Gerenciamento de Locais - Sistema PC</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <!--<script src="{{ url_for('static', filename='js/protection.js') }}"></script>-->
+    <script src="{{ url_for('static', filename='js/url-protection.js') }}"></script>
 </head>
 <body class="bg-gray-100 pt-6">
     {% include 'navbar.html' %}
@@ -29,12 +29,7 @@
                         <div class="bg-gray-50 rounded-xl p-4 mb-6">
                             <h3 class="text-lg font-semibold mb-4">Adicionar Novo Local</h3>
                             <div class="flex gap-4 mb-4">
-                                <input type="text" id="inputLocal" placeholder="Local (ex: A1, B2)" class="form-input-large" style="width: 150px;">
-                                <select id="inputNome" class="form-input-large" style="width: 150px;">
-                                    <option value="RACK1">RACK1</option>
-                                    <option value="RACK2">RACK2</option>
-                                    <option value="RACK3">RACK3</option>
-                                </select>
+                                <input type="text" id="inputLocal" placeholder="Local (ex: SLOT 1, SLOT 2)" class="form-input-large" style="width: 300px;">
                                 <button onclick="adicionarLocal()" class="btn-large bg-green-600 hover:bg-green-700 text-white">
                                     <i class="fas fa-plus mr-2"></i>Adicionar
                                 </button>
@@ -48,6 +43,37 @@
                             </div>
                         </div>
 
+                        <!-- Contadores -->
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                            <div class="card-estatistica bg-green-50 border-green-200">
+                                <div class="card-icon bg-green-100 text-green-600">
+                                    <i class="fas fa-check-circle"></i>
+                                </div>
+                                <div class="card-content">
+                                    <p class="card-label text-green-600">Locais Ativos</p>
+                                    <p class="card-value text-green-700" id="contadorAtivos">0</p>
+                                </div>
+                            </div>
+                            <div class="card-estatistica bg-red-50 border-red-200">
+                                <div class="card-icon bg-red-100 text-red-600">
+                                    <i class="fas fa-box"></i>
+                                </div>
+                                <div class="card-content">
+                                    <p class="card-label text-red-600">Locais Ocupados</p>
+                                    <p class="card-value text-red-700" id="contadorOcupados">0</p>
+                                </div>
+                            </div>
+                            <div class="card-estatistica bg-blue-50 border-blue-200">
+                                <div class="card-icon bg-blue-100 text-blue-600">
+                                    <i class="fas fa-inbox"></i>
+                                </div>
+                                <div class="card-content">
+                                    <p class="card-label text-blue-600">Locais Disponíveis</p>
+                                    <p class="card-value text-blue-700" id="contadorDisponiveis">0</p>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Lista de Locais -->
                         <div class="bg-white rounded-xl border border-gray-200 p-4 mb-6">
                             <h3 class="text-lg font-semibold mb-4">Lista de Locais</h3>
@@ -56,7 +82,7 @@
                                     <thead class="bg-gray-50">
                                         <tr>
                                             <th class="px-4 py-2 text-left cursor-pointer hover:bg-gray-100" onclick="sortTable(0)">Local <i class="fas fa-sort sort-icon"></i></th>
-                                            <th class="px-4 py-2 text-left cursor-pointer hover:bg-gray-100" onclick="sortTable(1)">Nome <i class="fas fa-sort sort-icon"></i></th>
+                                            <th class="px-4 py-2 text-center cursor-pointer hover:bg-gray-100" onclick="sortTable(1)">Limite <i class="fas fa-sort sort-icon"></i></th>
                                             <th class="px-4 py-2 text-left cursor-pointer hover:bg-gray-100" onclick="sortTable(2)">Status <i class="fas fa-sort sort-icon"></i></th>
                                             <th class="px-4 py-2 text-center cursor-pointer hover:bg-gray-100" onclick="sortTable(3)">Peças <i class="fas fa-sort sort-icon"></i></th>
                                             <th class="px-4 py-2 text-center">Ações</th>

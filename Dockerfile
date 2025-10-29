@@ -1,12 +1,23 @@
-FROM python:3.11-slim
+FROM python:3.9-slim
 
 WORKDIR /app
 
+# Copiar requirements primeiro para cache
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r requirements.txt
 
+# Copiar código da aplicação
 COPY . .
 
-EXPOSE 9993
+# Criar diretório para logs
+RUN mkdir -p /app/logs
 
-CMD ["python", "app.py"]
+# Tornar script executável
+RUN chmod +x start.sh
+
+# Expor ambas as portas
+EXPOSE 5001 5002
+
+# Usar script de inicialização
+CMD ["./start.sh"]

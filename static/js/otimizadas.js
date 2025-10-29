@@ -1,6 +1,12 @@
 document.addEventListener('DOMContentLoaded', () => {
     carregarOtimizadas();
     document.getElementById('campoPesquisaOtimizadas').focus();
+    
+    // Configurar botão de enviar para estoque se existir
+    const btnEnviarEstoque = document.getElementById('btnEnviarEstoque');
+    if (btnEnviarEstoque) {
+        btnEnviarEstoque.addEventListener('click', enviarParaEstoque);
+    }
 });
 
 async function carregarOtimizadas() {
@@ -11,12 +17,12 @@ async function carregarOtimizadas() {
         tbody.innerHTML = '';
         
         if (dados.error) {
-            tbody.innerHTML = `<tr><td colspan="10" class="border border-gray-200 px-4 py-6 text-center text-red-500">Erro: ${dados.error}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="11" class="border border-gray-200 px-4 py-6 text-center text-red-500">Erro: ${dados.error}</td></tr>`;
             return;
         }
         
         if (dados.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="10" class="border border-gray-200 px-4 py-6 text-center text-gray-500">Nenhuma peça otimizada</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="11" class="border border-gray-200 px-4 py-6 text-center text-gray-500">Nenhuma peça otimizada</td></tr>';
             return;
         }
         
@@ -28,34 +34,67 @@ async function carregarOtimizadas() {
             checkCell.innerHTML = `<input type="checkbox" class="row-checkbox" data-id="${item.id}">`;
             checkCell.className = 'border border-gray-200 px-4 py-3 text-center';
             
-            [item.op_pai, item.op, item.peca, item.projeto, item.veiculo, item.local, item.rack, item.camada].forEach(value => {
+            // Adicionar event listener para atualizar botão
+            const checkbox = checkCell.querySelector('.row-checkbox');
+            checkbox.addEventListener('change', atualizarBotaoEnviarEstoque);
+            
+            [item.op, item.peca, item.projeto, item.veiculo, item.local, item.sensor].forEach(value => {
                 const cell = row.insertCell();
                 cell.textContent = value || '-';
                 cell.className = 'border border-gray-200 px-4 py-3 text-sm text-gray-700';
             });
             
-            const statusCell = row.insertCell();
-            statusCell.className = 'border border-gray-200 px-4 py-3 text-center';
-            statusCell.innerHTML = item.cortada ? 
-                '<span class="bg-green-100 text-green-800 px-2 py-1 rounded text-xs">Cortada</span>' : 
-                '<span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-xs">Pendente</span>';
+            const dataCorteCell = row.insertCell();
+            dataCorteCell.className = 'border border-gray-200 px-4 py-3 text-center';
+            dataCorteCell.textContent = item.data_corte || '-';
             
             const actionCell = row.insertCell();
             actionCell.className = 'border border-gray-200 px-4 py-3 text-center';
-            actionCell.innerHTML = `<button onclick="enviarPecaIndividual('${item.id}')" class="btn-action-large" title="Enviar para estoque"><i class="fas fa-arrow-right"></i></button>`;
+            
+            // Verificar se usuário é do setor Produção
+            const isProducao = window.userSetor === 'Produção';
+            
+            actionCell.innerHTML = `
+                <div class="flex flex-col gap-2 items-center">
+                    ${!isProducao ? `<button onclick="enviarPecaIndividual('${item.id}')" class="btn-action-large" title="Enviar para estoque"><i class="fas fa-arrow-right"></i></button>` : ''}
+                    <div class="${!isProducao ? 'border-t border-gray-300 pt-2' : ''} w-full text-center">
+                        <button onclick="abrirModalBaixa('${item.id}', 'otimizadas')" class="btn-yellow text-white" title="Baixa">Baixa</button>
+                    </div>
+                </div>
+            `;
         });
         
         atualizarContadorOtimizadas(dados.length);
+        atualizarBotaoEnviarEstoque();
         
     } catch (error) {
-        tbody.innerHTML = '<tr><td colspan="11" class="border border-gray-200 px-4 py-6 text-center text-red-500">Erro ao carregar peças</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="12" class="border border-gray-200 px-4 py-6 text-center text-red-500">Erro ao carregar peças</td></tr>';
     }
 }
 
 const toggleAll = () => {
     const selectAll = document.getElementById('selectAll');
     document.querySelectorAll('.row-checkbox').forEach(cb => cb.checked = selectAll.checked);
+    
+    // Atualizar estado do botão de enviar para estoque
+    atualizarBotaoEnviarEstoque();
 };
+
+function atualizarBotaoEnviarEstoque() {
+    const btnEnviarEstoque = document.getElementById('btnEnviarEstoque');
+    if (!btnEnviarEstoque) return;
+    
+    const checkboxes = document.querySelectorAll('.row-checkbox:checked');
+    const temSelecionadas = checkboxes.length > 0;
+    
+    if (temSelecionadas) {
+        btnEnviarEstoque.disabled = false;
+        btnEnviarEstoque.className = 'btn-large bg-green-600 hover:bg-green-700 text-white';
+    } else {
+        btnEnviarEstoque.disabled = true;
+        btnEnviarEstoque.className = 'btn-large btn-disabled';
+    }
+}
 
 async function enviarParaEstoque() {
     const checkboxes = document.querySelectorAll('.row-checkbox:checked');
@@ -265,12 +304,15 @@ const filtrarTabelaOtimizadas = () => {
         const cells = linha.querySelectorAll('td');
         let match = false;
         
-        if (cells.length >= 8) {
-            const peca = cells[3].textContent.toLowerCase();
-            const op = cells[2].textContent.toLowerCase();
-            const camada = cells[8].textContent.toLowerCase();
-            const searchText = `${peca}${op}${camada}`;
-            match = searchText.includes(filtro) || linha.textContent.toLowerCase().includes(filtro);
+        if (cells.length > 1) {
+            const op = cells[1].textContent.toLowerCase();
+            const peca = cells[2].textContent.toLowerCase();
+            
+            // Buscar por peça+op+camada (formato: TSP12345PC)
+            const pecaOpCamada = `${peca}${op}pc`;
+            
+            match = linha.textContent.toLowerCase().includes(filtro) ||
+                   pecaOpCamada.includes(filtro);
         } else {
             match = linha.textContent.toLowerCase().includes(filtro);
         }
@@ -326,3 +368,50 @@ function showPopup(message, isError = false) {
         document.getElementById('campoPesquisaOtimizadas').focus();
     }, 3000);
 }
+
+// Funções para modal de baixa
+function abrirModalBaixa(pecaId, origem) {
+    document.getElementById('baixaPecaId').value = pecaId;
+    document.getElementById('modalBaixa').classList.add('show');
+    setTimeout(() => {
+        document.getElementById('motivoBaixa').focus();
+    }, 100);
+}
+
+function fecharModalBaixa() {
+    document.getElementById('modalBaixa').classList.remove('show');
+    document.getElementById('formBaixa').reset();
+}
+
+document.getElementById('formBaixa').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const pecaId = document.getElementById('baixaPecaId').value;
+    const motivoBaixa = document.getElementById('motivoBaixa').value;
+    const origem = 'otimizadas';
+    
+    if (!motivoBaixa) {
+        showPopup('Selecione o motivo da baixa', true);
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/baixar-peca', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: pecaId, motivo_baixa: motivoBaixa, origem })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showPopup(result.message);
+            fecharModalBaixa();
+            await carregarOtimizadas();
+        } else {
+            showPopup(result.message, true);
+        }
+    } catch (error) {
+        showPopup('Erro ao processar baixa: ' + error.message, true);
+    }
+});

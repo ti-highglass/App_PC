@@ -3,14 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Consulta de Estoque - Sistema PU</title>
+    <title>Consulta de Estoque - Sistema PC</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <script src="{{ url_for('static', filename='js/protection.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/url-protection.js') }}"></script>
 </head>
 <body class="bg-gray-100 pt-6">
     {% include 'navbar.html' %}
-    
     <div class="container mx-auto px-4">
         <div class="container-quadrado">
             <div class="bg-white rounded-b-3xl shadow-3xl overflow-hidden animate-fade-in border border-gray-200 border-t-0">
@@ -31,7 +30,10 @@
                         <!-- Botões e pesquisa -->
                         <div class="bg-gray-50 rounded-xl p-6 mb-6">
                             <div class="flex justify-center gap-4 mb-4">
-                                <button id="btnSaidaMassiva" onclick="saidaMassiva()" class="btn-large bg-red-600 hover:bg-red-700 text-white">
+                                <button onclick="abrirModalEntradaManual()" class="btn-large bg-blue-600 hover:bg-blue-700 text-white">
+                                    <i class="fas fa-plus mr-2"></i> Entrada Manual
+                                </button>
+                                <button id="btnSaidaMassiva" onclick="saidaMassiva()" class="btn-large bg-red-600 hover:bg-red-700 text-white" style="display: none;">
                                     <i class="fas fa-sign-out-alt mr-2"></i> Saída Massiva
                                 </button>
                                 <button onclick="gerarExcel()" class="btn-large bg-green-600 hover:bg-green-700 text-white">
@@ -41,6 +43,7 @@
                             <div class="flex justify-center">
                                 <input type="text" id="campoPesquisaEstoque" placeholder="Pesquisar OP, Peça, Veículo, Local..." 
                                        class="form-input-large w-96"
+                                       maxlength="10"
                                        oninput="filtrarTabelaEstoque()">
                             </div>
                         </div>
@@ -50,22 +53,21 @@
                             <table id="tabela-estoque" class="w-full border-collapse">
                                 <thead>
                                     <tr class="bg-gray-50">
-                                        <th class="border border-gray-200 px-4 py-3 text-center">
-                                            <input type="checkbox" id="selectAll" onchange="toggleAll()">
+                                        <th class="border border-gray-200 px-4 py-3 text-center text-sm font-semibold text-gray-700">
+                                            <div id="contadorSelecionadas" class="text-xs text-gray-600">0 selecionada(s)</div>
                                         </th>
-                                        <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(1)">OP PAI</th>
-                                        <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(2)">OP</th>
-                                        <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(3)">PEÇA</th>
-                                        <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(4)">PROJETO</th>
-                                        <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(5)">VEÍCULO</th>
-                                        <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(6)">LOCAL</th>
-                                        <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(7)">RACK</th>
-                                        <th class="border border-gray-200 px-4 py-3 text-center text-sm font-semibold text-gray-700">AÇÃO</th>
+                                        <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(1)">OP</th>
+                                        <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(2)">PEÇA</th>
+                                        <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(3)">PROJETO</th>
+                                        <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(4)">VEÍCULO</th>
+                                        <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(5)">LOCAL</th>
+                                        <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(6)">SENSOR</th>
+                                        <th class="border border-gray-200 px-4 py-3 text-center text-sm font-semibold text-gray-700">AÇÕES</th>
                                     </tr>
                                 </thead>
                                 <tbody id="estoque-tbody">
                                     <tr>
-                                        <td colspan="9" class="border border-gray-200 px-4 py-6 text-center text-gray-500">
+                                        <td colspan="8" class="border border-gray-200 px-4 py-6 text-center text-gray-500">
                                             Carregando estoque...
                                         </td>
                                     </tr>
@@ -75,6 +77,121 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Modal de Entrada Manual -->
+    <div id="modalEntradaManual" class="modal-baixa">
+        <div class="modal-baixa-content">
+            <div class="modal-baixa-header">
+                <h3>Entrada Manual no Estoque</h3>
+                <button type="button" onclick="fecharModalEntradaManual()" class="modal-close-btn">&times;</button>
+            </div>
+            <form id="formEntradaManual">
+                <div class="modal-baixa-body">
+                    <div class="grid grid-cols-1 gap-4">
+                        <div>
+                            <label class="modal-label">OP:</label>
+                            <input type="text" id="entradaOP" class="form-input-large" required placeholder="Ex: 12345">
+                        </div>
+                        <div>
+                            <label class="modal-label">Peça:</label>
+                            <input type="text" id="entradaPeca" class="form-input-large" required placeholder="Ex: TSP" oninput="buscarVeiculo()">
+                        </div>
+                        <div>
+                            <label class="modal-label">Projeto:</label>
+                            <input type="text" id="entradaProjeto" class="form-input-large" required placeholder="Ex: 514" oninput="buscarVeiculo()">
+                        </div>
+                        <div>
+                            <label class="modal-label">Veículo:</label>
+                            <input type="text" id="entradaVeiculo" class="form-input-large" readonly placeholder="Será preenchido automaticamente">
+                        </div>
+                        <div>
+                            <label class="modal-label">Local Sugerido:</label>
+                            <input type="text" id="entradaLocal" class="form-input-large" readonly placeholder="Será sugerido automaticamente">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-baixa-footer">
+                    <button type="button" onclick="fecharModalEntradaManual()" class="btn-modal btn-cancelar">Cancelar</button>
+                    <button type="submit" class="btn-modal btn-confirmar">Adicionar ao Estoque</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal de Edição -->
+    <div id="modalEdicao" class="modal-baixa">
+        <div class="modal-baixa-content">
+            <div class="modal-baixa-header">
+                <h3>Editar Peça do Estoque</h3>
+                <button type="button" onclick="fecharModalEdicao()" class="modal-close-btn">&times;</button>
+            </div>
+            <form id="formEdicao">
+                <input type="hidden" id="edicaoId">
+                <div class="modal-baixa-body">
+                    <div class="grid grid-cols-1 gap-4">
+                        <div>
+                            <label class="modal-label">OP:</label>
+                            <input type="text" id="edicaoOP" class="form-input-large" required placeholder="Ex: 12345">
+                        </div>
+                        <div>
+                            <label class="modal-label">Peça:</label>
+                            <input type="text" id="edicaoPeca" class="form-input-large" required placeholder="Ex: TSP">
+                        </div>
+                        <div>
+                            <label class="modal-label">Projeto:</label>
+                            <input type="text" id="edicaoProjeto" class="form-input-large" required placeholder="Ex: 514">
+                        </div>
+                        <div>
+                            <label class="modal-label">Veículo:</label>
+                            <input type="text" id="edicaoVeiculo" class="form-input-large" placeholder="Ex: Honda CRV">
+                        </div>
+                        <div>
+                            <label class="modal-label">Local:</label>
+                            <input type="text" id="edicaoLocal" class="form-input-large" placeholder="Ex: SLOT 1">
+                        </div>
+                        <div>
+                            <label class="modal-label">Sensor:</label>
+                            <input type="text" id="edicaoSensor" class="form-input-large" placeholder="Ex: A">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-baixa-footer">
+                    <button type="button" onclick="fecharModalEdicao()" class="btn-modal btn-cancelar">Cancelar</button>
+                    <button type="submit" class="btn-modal btn-confirmar">Salvar Alterações</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal de Baixa -->
+    <div id="modalBaixa" class="modal-baixa">
+        <div class="modal-baixa-content">
+            <div class="modal-baixa-header">
+                <h3>Baixa de Peça</h3>
+                <button type="button" onclick="fecharModalBaixa()" class="modal-close-btn">&times;</button>
+            </div>
+            <form id="formBaixa">
+                <input type="hidden" id="baixaPecaId">
+                <div class="modal-baixa-body">
+                    <label class="modal-label">Motivo da Baixa:</label>
+                    <select id="motivoBaixa" class="form-input-large" required>
+                        <option value="">Selecione o motivo...</option>
+                        <option value="Risco">Risco</option>
+                        <option value="Arquivo desatualizado">Arquivo desatualizado</option>
+                        <option value="Chapa Correu no Corte">Chapa Correu no Corte</option>
+                        <option value="Risco por estilete">Risco por estilete</option>
+                        <option value="Risco por Usinagem">Risco por Usinagem</option>
+                        <option value="Modelo de sensor errado">Modelo de sensor errado</option>
+                        <option value="Quebra">Quebra</option>
+                    </select>
+                </div>
+                <div class="modal-baixa-footer">
+                    <button type="button" onclick="fecharModalBaixa()" class="btn-modal btn-cancelar">Cancelar</button>
+                    <button type="submit" class="btn-modal btn-confirmar">Confirmar Baixa</button>
+                </div>
+            </form>
         </div>
     </div>
 

@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gerenciamento de Arquivos - Sistema PU</title>
+    <title>Gerenciamento de Arquivos - Sistema PC</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <!--<script src="{{ url_for('static', filename='js/protection.js') }}"></script>-->
+    <script src="{{ url_for('static', filename='js/url-protection.js') }}"></script>
 </head>
 <body class="bg-gray-100 pt-6">
     {% include 'navbar.html' %}
@@ -42,10 +42,11 @@
                             <table id="tabela-arquivos" class="w-full border-collapse">
                                 <thead>
                                     <tr class="bg-gray-50">
-                                        <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(1)">PROJETO</th>
-                                        <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(2)">PEÇA</th>
-                                        <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(3)">NOME ARQUIVO</th>
-                                        <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(4)">CAMADA</th>
+                                        <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(0)">PROJETO</th>
+                                        <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(1)">PEÇA</th>
+                                        <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(2)">NOME ARQUIVO</th>
+                                        <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(3)">CAMADA</th>
+                                        <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(4)">SENSOR</th>
                                         <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(5)">ESPESSURA</th>
                                         <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(6)">QUANTIDADE</th>
                                         <th class="border border-gray-200 px-4 py-3 text-center text-sm font-semibold text-gray-700">AÇÕES</th>
@@ -53,7 +54,7 @@
                                 </thead>
                                 <tbody id="arquivos-tbody">
                                     <tr>
-                                        <td colspan="9" class="border border-gray-200 px-4 py-6 text-center text-gray-500">
+                                        <td colspan="8" class="border border-gray-200 px-4 py-6 text-center text-gray-500">
                                             Carregando arquivos...
                                         </td>
                                     </tr>
@@ -79,24 +80,25 @@
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label class="block text-gray-700 text-sm font-bold mb-2">Projeto *</label>
-                            <input type="text" id="inputProjeto" class="form-input-large" required>
+                            <input type="text" id="inputProjeto" class="form-input-large" required oninput="atualizarNomeArquivo()">
                         </div>
                         <div>
                             <label class="block text-gray-700 text-sm font-bold mb-2">Peça *</label>
-                            <input type="text" id="inputPeca" class="form-input-large" required>
+                            <input type="text" id="inputPeca" class="form-input-large" required oninput="atualizarNomeArquivo()">
                         </div>
                         <div>
-                            <label class="block text-gray-700 text-sm font-bold mb-2">Nome do Arquivo *</label>
-                            <input type="text" id="inputNomePeca" class="form-input-large" required>
+                            <label class="block text-gray-700 text-sm font-bold mb-2">VERSÃO (SENSOR PBS)</label>
+                            <input type="text" id="inputSensor" class="form-input-large" placeholder="1, 2, 3...">
                         </div>
                         <div>
                             <label class="block text-gray-700 text-sm font-bold mb-2">Camada *</label>
                             <select id="inputCamada" class="form-input-large" required>
-                                <option value="">Selecione a camada</option>
-                                <option value="L1">L1</option>
-                                <option value="L2">L2</option>
-                                <option value="L3">L3</option>
+                                <option value="L3">PC</option>
                             </select>
+                        </div>
+                        <div>
+                            <label class="block text-gray-700 text-sm font-bold mb-2">Nome do Arquivo *</label>
+                            <input type="text" id="inputNomePeca" class="form-input-large" required>
                         </div>
                         <div>
                             <label class="block text-gray-700 text-sm font-bold mb-2">Espessura</label>
@@ -104,7 +106,7 @@
                         </div>
                         <div>
                             <label class="block text-gray-700 text-sm font-bold mb-2">Quantidade</label>
-                            <input type="number" id="inputQuantidade" class="form-input-large">
+                            <input type="number" id="inputQuantidade" class="form-input-large" value="1">
                         </div>
                     </div>
                 </form>

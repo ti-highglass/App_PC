@@ -110,6 +110,7 @@ async function mostrarDetalhesLocal(local) {
                                 <th class="border border-gray-300 px-3 py-2 text-left font-semibold">Peça</th>
                                 <th class="border border-gray-300 px-3 py-2 text-left font-semibold">Projeto</th>
                                 <th class="border border-gray-300 px-3 py-2 text-left font-semibold">Veículo</th>
+                                <th class="border border-gray-300 px-3 py-2 text-left font-semibold">Origem</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -117,12 +118,14 @@ async function mostrarDetalhesLocal(local) {
             
             dados.pecas.forEach((peca, index) => {
                 const rowClass = index % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+                const origemColor = peca.origem === 'Estoque' ? 'text-green-600' : 'text-blue-600';
                 conteudoHTML += `
                     <tr class="${rowClass} hover:bg-blue-50">
                         <td class="border border-gray-300 px-3 py-2">${peca.op || '-'}</td>
                         <td class="border border-gray-300 px-3 py-2 font-medium">${peca.peca || '-'}</td>
                         <td class="border border-gray-300 px-3 py-2">${peca.projeto || '-'}</td>
                         <td class="border border-gray-300 px-3 py-2">${peca.veiculo || '-'}</td>
+                        <td class="border border-gray-300 px-3 py-2 ${origemColor} font-medium">${peca.origem || '-'}</td>
                     </tr>
                 `;
             });
@@ -178,6 +181,28 @@ async function criarListaLocais(locais) {
         console.error('Erro ao buscar contagem de peças:', error);
     }
     
+    // Calcular contadores
+    let locaisAtivos = 0;
+    let locaisOcupados = 0;
+    let locaisDisponiveis = 0;
+    
+    locais.forEach(local => {
+        if (local.status === 'Ativo') {
+            locaisAtivos++;
+            const totalPecas = contagemPecas[local.local] || 0;
+            if (totalPecas > 0) {
+                locaisOcupados++;
+            } else {
+                locaisDisponiveis++;
+            }
+        }
+    });
+    
+    // Atualizar contadores na tela
+    document.getElementById('contadorAtivos').textContent = locaisAtivos;
+    document.getElementById('contadorOcupados').textContent = locaisOcupados;
+    document.getElementById('contadorDisponiveis').textContent = locaisDisponiveis;
+    
     locais.forEach(local => {
         const tr = document.createElement('tr');
         tr.className = 'border-b hover:bg-gray-50';
@@ -190,7 +215,7 @@ async function criarListaLocais(locais) {
         
         tr.innerHTML = `
             <td class="px-4 py-2 font-medium">${local.local}</td>
-            <td class="px-4 py-2">${local.nome}</td>
+            <td class="px-4 py-2 text-center font-semibold">${local.limite || 6}</td>
             <td class="px-4 py-2 ${statusColor} font-semibold">${local.status}</td>
             <td class="px-4 py-2 text-center">
                 ${temPecas ? `
@@ -208,6 +233,10 @@ async function criarListaLocais(locais) {
                         <i class="fas fa-eye"></i>
                     </button>
                 ` : ''}
+                <button onclick="editarLocal('${local.local}', '${local.limite || 6}')" 
+                        class="btn-action btn-green mr-2" title="Editar Local">
+                    <i class="fas fa-edit"></i>
+                </button>
                 <button onclick="alterarStatusLocal('${local.local}', '${local.status === 'Ativo' ? 'Inativo' : 'Ativo'}')" 
                         class="btn-action ${local.status === 'Ativo' ? 'btn-red' : 'btn-green'}" title="${local.status === 'Ativo' ? 'Desativar' : 'Ativar'}">
                     <i class="fas ${local.status === 'Ativo' ? 'fa-times' : 'fa-check'}"></i>
@@ -277,6 +306,65 @@ async function adicionarLocal() {
         }
     } catch (error) {
         showPopup('Erro ao adicionar local', 'error');
+    }
+}
+
+function editarLocal(local, limiteAtual) {
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.style.display = 'flex';
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-edit mr-2"></i>Editar Local ${local}</h3>
+                <button class="modal-close" onclick="fecharModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Limite de Peças:</label>
+                    <input type="number" id="novoLimite" value="${limiteAtual}" min="1" max="50" 
+                           class="form-input-large w-full" placeholder="Digite o novo limite">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-large bg-gray-500 hover:bg-gray-600 text-white mr-2" onclick="fecharModal()">
+                    <i class="fas fa-times mr-2"></i>Cancelar
+                </button>
+                <button class="btn-large bg-blue-600 hover:bg-blue-700 text-white" onclick="salvarEdicaoLocal('${local}')">
+                    <i class="fas fa-save mr-2"></i>Salvar
+                </button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+async function salvarEdicaoLocal(local) {
+    const novoLimite = document.getElementById('novoLimite').value;
+    
+    if (!novoLimite || novoLimite < 1) {
+        showPopup('Digite um limite válido', 'error');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/editar-local', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ local, limite: parseInt(novoLimite) })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showPopup(result.message, 'success');
+            fecharModal();
+            carregarLocais();
+        } else {
+            showPopup('Erro: ' + result.message, 'error');
+        }
+    } catch (error) {
+        showPopup('Erro ao editar local', 'error');
     }
 }
 
