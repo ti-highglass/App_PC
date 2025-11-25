@@ -40,7 +40,13 @@
                                     <i class="fas fa-file-excel mr-2"></i> Gerar Excel
                                 </button>
                             </div>
-                            <div class="flex justify-center">
+                            <div class="flex justify-center gap-4">
+                                <select id="tipoFiltroEstoque" class="form-input-large" style="width: 250px;">
+                                    <option value="peca_op">PEÇA+OP</option>      
+                                    <option value="local">LOCAL</option>
+                                    <option value="data">DATA</option>
+                                    <option value="geral">Busca Geral</option>
+                                </select>
                                 <input type="text" id="campoPesquisaEstoque" placeholder="Pesquisar OP, Peça, Veículo, Local..." 
                                        class="form-input-large w-96"
                                        maxlength="10"
@@ -62,12 +68,13 @@
                                         <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(4)">VEÍCULO</th>
                                         <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(5)">LOCAL</th>
                                         <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(6)">SENSOR</th>
+                                        <th class="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-700 sortable" onclick="sortTable(7)">LOTE</th>
                                         <th class="border border-gray-200 px-4 py-3 text-center text-sm font-semibold text-gray-700">AÇÕES</th>
                                     </tr>
                                 </thead>
                                 <tbody id="estoque-tbody">
                                     <tr>
-                                        <td colspan="8" class="border border-gray-200 px-4 py-6 text-center text-gray-500">
+                                        <td colspan="9" class="border border-gray-200 px-4 py-6 text-center text-gray-500">
                                             Carregando estoque...
                                         </td>
                                     </tr>

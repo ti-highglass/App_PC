@@ -67,7 +67,11 @@ function filtrarPecas(termo) {
     
     todasLinhas.forEach(linha => {
         const texto = linha.textContent.toLowerCase();
-        const visivel = texto.includes(termoLower);
+        // Buscar por PEÇA+OP (sem espaços) no texto que contém PEÇA - OP
+        const textoSemEspacos = texto.replace(/\s+/g, '').replace('-', '');
+        const termoSemEspacos = termoLower.replace(/\s+/g, '');
+        
+        const visivel = texto.includes(termoLower) || textoSemEspacos.includes(termoSemEspacos);
         
         if (visivel) {
             linha.classList.remove('hidden');
@@ -187,32 +191,51 @@ function renderizarDashboard(dados) {
     curvo = ordenarPecas(curvo);
     critico = ordenarPecas(critico);
     
-    // Dividir pré-montagem em quatro colunas
-    const quartoAviso = Math.ceil(aviso.length / 4);
-    const aviso1 = aviso.slice(0, quartoAviso);
-    const aviso2 = aviso.slice(quartoAviso, quartoAviso * 2);
-    const aviso3 = aviso.slice(quartoAviso * 2, quartoAviso * 3);
-    const aviso4 = aviso.slice(quartoAviso * 3);
+    // Dividir pré-montagem em duas colunas (mais compacto)
+    const aviso1 = [];
+    const aviso2 = [];
+    aviso.forEach((item, index) => {
+        if (index % 2 === 0) {
+            aviso1.push(item);
+        } else {
+            aviso2.push(item);
+        }
+    });
     
-    // Dividir blocos em duas colunas cada
-    const metadePlano = Math.ceil(plano.length / 2);
-    const plano1 = plano.slice(0, metadePlano);
-    const plano2 = plano.slice(metadePlano);
+    // Dividir blocos em quatro colunas cada para melhor distribuição
+    const plano1 = [];
+    const plano2 = [];
+    const plano3 = [];
+    const plano4 = [];
+    plano.forEach((item, index) => {
+        const col = index % 4;
+        if (col === 0) plano1.push(item);
+        else if (col === 1) plano2.push(item);
+        else if (col === 2) plano3.push(item);
+        else plano4.push(item);
+    });
     
-    const metadeCurvo = Math.ceil(curvo.length / 2);
-    const curvo1 = curvo.slice(0, metadeCurvo);
-    const curvo2 = curvo.slice(metadeCurvo);
+    // Dividir curvo em duas colunas alternando
+    const curvo1 = [];
+    const curvo2 = [];
+    curvo.forEach((item, index) => {
+        if (index % 2 === 0) {
+            curvo1.push(item);
+        } else {
+            curvo2.push(item);
+        }
+    });
     
     // Renderizar cada categoria
     renderizarPecas(aviso1, pecasAviso1);
     renderizarPecas(aviso2, pecasAviso2);
-    renderizarPecas(aviso3, pecasAviso3);
-    renderizarPecas(aviso4, pecasAviso4);
+    if (pecasAviso3) renderizarPecas(plano3, pecasAviso3);
+    if (pecasAviso4) renderizarPecas(plano4, pecasAviso4);
     renderizarPecas(plano1, pecasPlano1);
     renderizarPecas(plano2, pecasPlano2);
     renderizarPecas(curvo1, pecasCurvo1);
     renderizarPecas(curvo2, pecasCurvo2);
-    renderizarPecas(critico, pecasCritico);
+    if (pecasCritico) renderizarPecas(critico, pecasCritico);
 }
 
 function ordenarPecas(pecas) {
@@ -228,8 +251,8 @@ function ordenarPecas(pecas) {
         }
         
         // Depois por peça+OP
-        const pecaOpA = `${a.peca}-${a.op}`;
-        const pecaOpB = `${b.peca}-${b.op}`;
+        const pecaOpA = `${a.peca}+${a.op}`;
+        const pecaOpB = `${b.peca}+${b.op}`;
         
         return pecaOpA.localeCompare(pecaOpB);
     });
@@ -303,8 +326,8 @@ function atualizarContadores(dados) {
     document.getElementById('contadorCritico').textContent = critico;
     
     // Atualizar contadores das abas
-    document.getElementById('tabCounterPremontagem').textContent = aviso;
-    document.getElementById('tabCounterCriticas').textContent = plano + curvo + critico;
+    document.getElementById('tabCounterPremontagem').textContent = aviso + critico;
+    document.getElementById('tabCounterCriticas').textContent = plano + curvo;
 }
 
 function atualizarUltimaAtualizacao() {
@@ -330,15 +353,66 @@ function mostrarDetalhes(peca) {
 }
 
 function mostrarErro(mensagem) {
-    const statusBoard = document.getElementById('statusBoard');
-    statusBoard.innerHTML = `
-        <div class="col-span-full text-center py-20">
-            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg inline-block">
-                <i class="fas fa-exclamation-triangle mr-2"></i>
-                ${mensagem}
+    const mainContent = document.querySelector('.main-content');
+    if (mainContent) {
+        mainContent.innerHTML = `
+            <div class="text-center py-20">
+                <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg inline-block">
+                    <i class="fas fa-exclamation-triangle mr-2"></i>
+                    ${mensagem}
+                </div>
             </div>
-        </div>
-    `;
+        `;
+    }
+}
+
+// Função para exportar relatório
+async function exportarRelatorio() {
+    if (!dadosOriginais || dadosOriginais.length === 0) {
+        alert('Nenhum dado disponível para exportar');
+        return;
+    }
+    
+    try {
+        // Mostrar loading no botão
+        const exportBtn = document.querySelector('.export-btn');
+        const originalIcon = exportBtn.innerHTML;
+        exportBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        exportBtn.disabled = true;
+        
+        const response = await fetch('/api/gerar-excel-dashboard', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                dados: dadosOriginais,
+                aba_ativa: abaAtiva
+            })
+        });
+        
+        if (response.ok) {
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `dashboard_producao_${new Date().toISOString().split('T')[0]}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        } else {
+            throw new Error('Erro ao gerar relatório');
+        }
+    } catch (error) {
+        console.error('Erro ao exportar:', error);
+        alert('Erro ao gerar relatório: ' + error.message);
+    } finally {
+        // Restaurar botão
+        const exportBtn = document.querySelector('.export-btn');
+        exportBtn.innerHTML = '<i class="fas fa-file-excel"></i>';
+        exportBtn.disabled = false;
+    }
 }
 
 // Função para notificação sonora (opcional)

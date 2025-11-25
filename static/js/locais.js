@@ -111,6 +111,7 @@ async function mostrarDetalhesLocal(local) {
                                 <th class="border border-gray-300 px-3 py-2 text-left font-semibold">Projeto</th>
                                 <th class="border border-gray-300 px-3 py-2 text-left font-semibold">Veículo</th>
                                 <th class="border border-gray-300 px-3 py-2 text-left font-semibold">Origem</th>
+                                <th class="border border-gray-300 px-3 py-2 text-center font-semibold">Ações</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -126,6 +127,14 @@ async function mostrarDetalhesLocal(local) {
                         <td class="border border-gray-300 px-3 py-2">${peca.projeto || '-'}</td>
                         <td class="border border-gray-300 px-3 py-2">${peca.veiculo || '-'}</td>
                         <td class="border border-gray-300 px-3 py-2 ${origemColor} font-medium">${peca.origem || '-'}</td>
+                        <td class="border border-gray-300 px-3 py-2 text-center">
+                            ${peca.origem === 'Estoque' ? `
+                                <button onclick="darSaidaPeca('${peca.op}', '${peca.peca}', '${local}')" 
+                                        class="btn-action btn-red" title="Dar Saída">
+                                    <i class="fas fa-sign-out-alt"></i>
+                                </button>
+                            ` : ''}
+                        </td>
                     </tr>
                 `;
             });
@@ -391,6 +400,32 @@ async function alterarStatusLocal(local, novoStatus) {
     } catch (error) {
         showPopup('Status alterado com sucesso!', 'success');
         carregarLocais();
+    }
+}
+
+async function darSaidaPeca(op, peca, local) {
+    if (!confirm(`Confirma a saída da peça ${peca} OP ${op} do local ${local}?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/dar-saida-peca-local', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ op, peca, local })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showPopup(result.message, 'success');
+            fecharModal();
+            carregarLocais();
+        } else {
+            showPopup('Erro: ' + result.message, 'error');
+        }
+    } catch (error) {
+        showPopup('Erro ao dar saída: ' + error.message, 'error');
     }
 }
 

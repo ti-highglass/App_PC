@@ -46,15 +46,17 @@ function carregarUsuarios() {
                 const acaoCell = row.insertCell();
                 acaoCell.className = 'border border-gray-200 px-4 py-3 text-center';
                 acaoCell.innerHTML = `
-                    <button onclick="resetarSenha(${user.id})" class="btn-action btn-yellow" title="Resetar Senha">
-                        <i class="fas fa-key"></i>
-                    </button>
-                    <button onclick="abrirModalEdicao(${user.id}, '${user.usuario}', '${user.funcao}', '${user.setor}')" class="btn-action btn-blue" title="Editar">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                    <button onclick="excluirUsuario(${user.id}, '${user.usuario}')" class="btn-action btn-red-action" title="Excluir">
-                        <i class="fas fa-trash"></i>
-                    </button>
+                    <div class="flex justify-center gap-2">
+                        <button onclick="resetarSenha(${user.id})" class="btn-action btn-yellow" title="Resetar Senha">
+                            <i class="fas fa-key"></i>
+                        </button>
+                        <button onclick="abrirModalEdicao(${user.id}, '${user.usuario}', '${user.funcao}', '${user.setor}')" class="btn-action btn-blue" title="Editar">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button onclick="excluirUsuario(${user.id}, '${user.usuario}')" class="btn-action btn-red-action" title="Excluir">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
                 `;
             });
         })

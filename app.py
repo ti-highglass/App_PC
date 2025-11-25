@@ -474,9 +474,6 @@ def otimizadas():
 @app.route('/saidas')
 @login_required
 def saidas():
-    if current_user.setor not in ['Administrativo', 'T.I']:
-        flash('Acesso negado para este setor.')
-        return redirect(url_for('otimizadas'))
     return render_template('saidas.html')
 
 @app.route('/arquivos')
@@ -494,6 +491,8 @@ def baixas():
         flash('Acesso negado para este setor.')
         return redirect(url_for('otimizadas'))
     return render_template('baixas.html')
+
+
 
 
 
@@ -1093,7 +1092,7 @@ def api_dados():
             FROM public.plano_controle_corte_vidro2 p
             LEFT JOIN public.ficha_tecnica_veiculos f ON p.projeto = f.codigo_veiculo
             WHERE (p.pc_cortado IS NULL OR p.pc_cortado = '' OR p.pc_cortado != 'CORTADO')
-            AND (p.etapa_baixa IS NULL OR p.etapa_baixa = '' OR p.etapa_baixa = 'INSPECAO FINAL' OR p.etapa_baixa = 'RT-RP')
+            AND (p.etapa_baixa IS NULL OR p.etapa_baixa = '' OR p.etapa_baixa = 'INSPECAO FINAL' OR p.etapa_baixa = 'RT-RP' OR p.etapa_baixa = 'EMBOLSADO' OR p.etapa_baixa = 'BUFFER-AUTOCLAVE' OR p.etapa_baixa = 'AUTOCLAVE')
         """
         params = []
         
@@ -1115,6 +1114,7 @@ def api_dados():
         
         # Processar dados do banco com verificação de duplicatas
         dados_filtrados = []
+        pecas_sem_local = []  # Lista para peças que não têm local disponível
         pecas_processadas = set()  # Para evitar duplicatas no processamento
         
         for row in dados_banco:
@@ -1130,12 +1130,47 @@ def api_dados():
                     # Aplicar lógica de sugestão
                     local_sugerido, rack_sugerido = sugerir_local_armazenamento(row['peca'], locais_ocupados, conn)
                     
-                    # Se não há slot disponível, pular esta peça
+                    # Se não há slot disponível, adicionar à lista de peças sem local
                     if local_sugerido is None:
+                        peca_sem_local = {
+                            'op': str(row['op']) if row['op'] else '',
+                            'peca': str(row['peca']) if row['peca'] else '',
+                            'projeto': str(row['projeto']) if row['projeto'] else '',
+                            'veiculo': str(row['veiculo']) if row['veiculo'] else '',
+                            'sensor': str(row['sensor']) if row['sensor'] else '',
+                            'motivo': 'Não há slots disponíveis'
+                        }
+                        pecas_sem_local.append(peca_sem_local)
                         continue
                     
                     # Verificar se existe arquivo de corte e buscar nome com sensor correto
-                    sensor_busca = str(row['sensor']) if row['sensor'] and str(row['sensor']).strip() != '-' else '1'
+                    sensor_busca = str(row['sensor']) if row['sensor'] and str(row['sensor']).strip() != '-' else None
+                    
+                    # Se não encontrou sensor, buscar na tabela dados_uso_geral.dados_op
+                    if not sensor_busca:
+                        try:
+                            print(f"DEBUG SENSOR: Buscando PBS para OP {row['op']}")
+                            cur.execute("""
+                                SELECT item FROM dados_uso_geral.dados_op 
+                                WHERE op = %s AND item LIKE 'PBS%'
+                                LIMIT 1
+                            """, (row['op'],))
+                            pbs_result = cur.fetchone()
+                            print(f"DEBUG SENSOR: Resultado PBS: {pbs_result}")
+                            if pbs_result:
+                                # Extrair sensor do item PBS (ex: PBS_2 -> sensor 2)
+                                pbs_item = pbs_result['item']
+                                print(f"DEBUG SENSOR: Item PBS encontrado: {pbs_item}")
+                                if '_' in str(pbs_item):
+                                    sensor_busca = str(pbs_item).split('_')[-1]
+                                    print(f"DEBUG SENSOR: Sensor extraído: {sensor_busca}")
+                        except Exception as pbs_error:
+                            print(f"DEBUG SENSOR: Erro ao buscar sensor PBS: {pbs_error}")
+                    
+                    # Se ainda não encontrou, usar padrão '1'
+                    if not sensor_busca:
+                        sensor_busca = '1'
+                    
                     print(f"DEBUG ARQUIVO: Buscando arquivo para projeto='{row['projeto']}', peca='{row['peca']}', sensor='{sensor_busca}'")
                     
                     # Buscar arquivo com sensor exato na coluna sensor
@@ -1187,8 +1222,14 @@ def api_dados():
                 continue
         
         conn.close()
-        print(f"DEBUG: Retornando {len(dados_filtrados)} itens filtrados")
-        return jsonify(dados_filtrados)
+        print(f"DEBUG: Retornando {len(dados_filtrados)} itens filtrados e {len(pecas_sem_local)} peças sem local")
+        
+        # Retornar dados com informação sobre peças sem local
+        return jsonify({
+            'dados': dados_filtrados,
+            'pecas_sem_local': pecas_sem_local,
+            'total_sem_local': len(pecas_sem_local)
+        })
         
     except Exception as e:
         print(f"DEBUG: Erro na API dados: {str(e)}")
@@ -1204,7 +1245,7 @@ def api_estoque():
         
         # Buscar todos os dados
         cur.execute("""
-            SELECT id, op, peca, projeto, veiculo, local, sensor, camada
+            SELECT id, op, peca, projeto, veiculo, local, sensor, camada, lote_pc
             FROM public.pc_inventory
             ORDER BY id DESC
         """)
@@ -1221,7 +1262,8 @@ def api_estoque():
                 'veiculo': row['veiculo'] or '',
                 'local': row['local'] or '',
                 'sensor': row['sensor'] or '',
-                'camada': row['camada'] or ''
+                'camada': row['camada'] or '',
+                'lote_pc': row['lote_pc'] or ''
             })
         
         print(f"DEBUG: Retornando {len(resultado)} itens do estoque")
@@ -1262,7 +1304,8 @@ def otimizar_pecas():
             conn.close()
             return jsonify({
                 'success': False, 
-                'message': f'Estoque cheio! Não há espaços disponíveis para {len(espacos_sem_local)} peça(s). Locais vazios: {[p.get("local") for p in espacos_sem_local]}'
+                'message': f'Estoque cheio! Não há espaços disponíveis para {len(espacos_sem_local)} peça(s). Locais vazios: {[p.get("local") for p in espacos_sem_local]}',
+                'allow_retry': True
             })
         
         # Criar tabelas se não existirem
@@ -1307,89 +1350,106 @@ def otimizar_pecas():
             camadas_result = cur.fetchone()
             print(f"DEBUG: Resultado camadas para peça {peca['peca']}: {camadas_result}")
             
-            if camadas_result:
-                # Processar apenas colunas específicas de camadas conhecidas
-                colunas_camadas_conhecidas = ['l3', 'l3_b', 'l4', 'l5', 'l6', 'l7', 'l8']
-                colunas_encontradas = [col for col in camadas_result.keys() if col in colunas_camadas_conhecidas]
+            # Verificar se há peças especiais definidas na tabela pc_camadas
+            pecas_para_processar = [peca['peca']]  # Padrão: peça original
+            
+            if camadas_result and camadas_result.get('pecas_especiais'):
+                pecas_especiais_str = camadas_result['pecas_especiais'].strip()
+                if pecas_especiais_str and pecas_especiais_str != '-':
+                    # Parse do formato "TSA - TSB" -> ['TSA', 'TSB']
+                    pecas_especiais_db = [p.strip() for p in pecas_especiais_str.split('-') if p.strip()]
+                    pecas_para_processar = pecas_especiais_db  # Usar as peças especiais da DB
+                    print(f"DEBUG: Peças especiais encontradas: {pecas_especiais_db}")
+            
+            print(f"DEBUG: Peças que serão processadas: {pecas_para_processar}")
+            
+            # Processar cada peça (original ou especiais)
+            for peca_atual in pecas_para_processar:
+                print(f"DEBUG: Processando peça: {peca_atual}")
                 
-                for coluna in colunas_encontradas:
-                    valor_camada = camadas_result[coluna]
-                    # Processar apenas se existir e for diferente de "-" ou vazio
-                    if valor_camada and str(valor_camada).strip() not in ['-', '', 'None', 'NULL', 'null']:
-                        try:
-                            quantidade_camada = int(float(str(valor_camada)))
-                            if quantidade_camada <= 0:
-                                continue
-                        except (ValueError, TypeError):
-                            quantidade_camada = 1
-                        
-                        # Inserir múltiplas linhas baseado na quantidade da camada
-                        for i in range(quantidade_camada):
-                            # Verificar duplicata antes de inserir (considerando índice da quantidade)
-                            camada_id = f"{coluna.upper()}_{i+1:02d}" if quantidade_camada > 1 else coluna.upper()
+                if camadas_result:
+                    # Processar apenas colunas específicas de camadas conhecidas
+                    colunas_camadas_conhecidas = ['l3', 'l3_b', 'l4', 'l5', 'l6', 'l7', 'l8']
+                    colunas_encontradas = [col for col in camadas_result.keys() if col in colunas_camadas_conhecidas]
+                    
+                    for coluna in colunas_encontradas:
+                        valor_camada = camadas_result[coluna]
+                        # Processar apenas se existir e for diferente de "-" ou vazio
+                        if valor_camada and str(valor_camada).strip() not in ['-', '', 'None', 'NULL', 'null']:
+                            try:
+                                quantidade_camada = int(float(str(valor_camada)))
+                                if quantidade_camada <= 0:
+                                    continue
+                            except (ValueError, TypeError):
+                                quantidade_camada = 1
                             
-                            cur.execute("SELECT COUNT(*) FROM public.pc_inventory WHERE op = %s AND peca = %s AND camada = %s", (peca['op'], peca['peca'], camada_id))
-                            if cur.fetchone()[0] > 0:
-                                print(f"DEBUG: Peça {peca['peca']} OP {peca['op']} camada {camada_id} já existe no estoque, pulando")
-                                continue
+                            # Inserir múltiplas linhas baseado na quantidade da camada
+                            for i in range(quantidade_camada):
+                                # Verificar duplicata antes de inserir (considerando índice da quantidade)
+                                camada_id = f"{coluna.upper()}_{i+1:02d}" if quantidade_camada > 1 else coluna.upper()
+                                
+                                cur.execute("SELECT COUNT(*) FROM public.pc_inventory WHERE op = %s AND peca = %s AND camada = %s", (peca['op'], peca_atual, camada_id))
+                                if cur.fetchone()[0] > 0:
+                                    print(f"DEBUG: Peça {peca_atual} OP {peca['op']} camada {camada_id} já existe no estoque, pulando")
+                                    continue
+                                
+                                cur.execute("SELECT COUNT(*) FROM public.pc_otimizadas WHERE op = %s AND peca = %s AND camada = %s AND tipo = 'PC'", (peca['op'], peca_atual, camada_id))
+                                if cur.fetchone()[0] > 0:
+                                    print(f"DEBUG: Peça {peca_atual} OP {peca['op']} camada {camada_id} já existe nas otimizadas, pulando")
+                                    continue
                             
-                            cur.execute("SELECT COUNT(*) FROM public.pc_otimizadas WHERE op = %s AND peca = %s AND camada = %s AND tipo = 'PC'", (peca['op'], peca['peca'], camada_id))
-                            if cur.fetchone()[0] > 0:
-                                print(f"DEBUG: Peça {peca['peca']} OP {peca['op']} camada {camada_id} já existe nas otimizadas, pulando")
-                                continue
-                        
-                            cur.execute("""
-                                INSERT INTO public.pc_otimizadas (op, peca, projeto, veiculo, sensor, local, rack, user_otimizacao, tipo, camada, lote_vd, lote_pc, data_corte)
-                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                            """, (
-                                peca['op'],
-                                peca['peca'],
-                                peca.get('projeto', ''),
-                                peca['veiculo'],
-                                peca.get('sensor', ''),
-                                peca['local'],
-                                peca['rack'],
-                                current_user.username,
-                                'PC',
-                                camada_id,
-                                peca.get('lote_vd', ''),
-                                peca.get('lote_pc', ''),
-                                peca.get('data_corte')
-                            ))
-                            total_inseridas += 1
-                            print(f"DEBUG: Inserida linha {camada_id} ({i+1}/{quantidade_camada})")
-            else:
-                print(f"DEBUG: Nenhuma camada encontrada para {peca['peca']}, inserindo sem camada")
-                # Se não encontrou camadas, inserir como antes (sem camada)
-                # Verificar duplicata antes de inserir
-                cur.execute("SELECT COUNT(*) FROM public.pc_inventory WHERE op = %s AND peca = %s AND (camada IS NULL OR camada = '')", (peca['op'], peca['peca']))
-                if cur.fetchone()[0] > 0:
-                    print(f"DEBUG: Peça {peca['peca']} OP {peca['op']} sem camada já existe no estoque, pulando")
-                    continue
-                
-                cur.execute("SELECT COUNT(*) FROM public.pc_otimizadas WHERE op = %s AND peca = %s AND (camada IS NULL OR camada = '') AND tipo = 'PC'", (peca['op'], peca['peca']))
-                if cur.fetchone()[0] > 0:
-                    print(f"DEBUG: Peça {peca['peca']} OP {peca['op']} sem camada já existe nas otimizadas, pulando")
-                    continue
-                
-                cur.execute("""
-                    INSERT INTO public.pc_otimizadas (op, peca, projeto, veiculo, sensor, local, rack, user_otimizacao, tipo, lote_vd, lote_pc, data_corte)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """, (
-                    peca['op'],
-                    peca['peca'],
-                    peca.get('projeto', ''),
-                    peca['veiculo'],
-                    peca.get('sensor', ''),
-                    peca['local'],
-                    peca['rack'],
-                    current_user.username,
-                    'PC',
-                    peca.get('lote_vd', ''),
-                    peca.get('lote_pc', ''),
-                    peca.get('data_corte')
-                ))
-                total_inseridas += 1
+                                cur.execute("""
+                                    INSERT INTO public.pc_otimizadas (op, peca, projeto, veiculo, sensor, local, rack, user_otimizacao, tipo, camada, lote_vd, lote_pc, data_corte)
+                                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                """, (
+                                    peca['op'],
+                                    peca_atual,  # Usar a peça atual (pode ser especial)
+                                    peca.get('projeto', ''),
+                                    peca['veiculo'],
+                                    peca.get('sensor', ''),
+                                    peca['local'],
+                                    peca['rack'],
+                                    current_user.username,
+                                    'PC',
+                                    camada_id,
+                                    peca.get('lote_vd', ''),
+                                    peca.get('lote_pc', ''),
+                                    peca.get('data_corte')
+                                ))
+                                total_inseridas += 1
+                                print(f"DEBUG: Inserida linha {peca_atual} {camada_id} ({i+1}/{quantidade_camada})")
+                else:
+                    print(f"DEBUG: Nenhuma camada encontrada para {peca_atual}, inserindo sem camada")
+                    # Se não encontrou camadas, inserir como antes (sem camada)
+                    # Verificar duplicata antes de inserir
+                    cur.execute("SELECT COUNT(*) FROM public.pc_inventory WHERE op = %s AND peca = %s AND (camada IS NULL OR camada = '')", (peca['op'], peca_atual))
+                    if cur.fetchone()[0] > 0:
+                        print(f"DEBUG: Peça {peca_atual} OP {peca['op']} sem camada já existe no estoque, pulando")
+                        continue
+                    
+                    cur.execute("SELECT COUNT(*) FROM public.pc_otimizadas WHERE op = %s AND peca = %s AND (camada IS NULL OR camada = '') AND tipo = 'PC'", (peca['op'], peca_atual))
+                    if cur.fetchone()[0] > 0:
+                        print(f"DEBUG: Peça {peca_atual} OP {peca['op']} sem camada já existe nas otimizadas, pulando")
+                        continue
+                    
+                    cur.execute("""
+                        INSERT INTO public.pc_otimizadas (op, peca, projeto, veiculo, sensor, local, rack, user_otimizacao, tipo, lote_vd, lote_pc, data_corte)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """, (
+                        peca['op'],
+                        peca_atual,  # Usar a peça atual (pode ser especial)
+                        peca.get('projeto', ''),
+                        peca['veiculo'],
+                        peca.get('sensor', ''),
+                        peca['local'],
+                        peca['rack'],
+                        current_user.username,
+                        'PC',
+                        peca.get('lote_vd', ''),
+                        peca.get('lote_pc', ''),
+                        peca.get('data_corte')
+                    ))
+                    total_inseridas += 1
         
         # Atualizar status para PROGRAMADO na tabela plano_controle_corte_vidro2
         for peca in pecas_selecionadas:
@@ -1418,7 +1478,7 @@ def api_otimizadas():
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
         cur.execute("""
-            SELECT id, op, peca, projeto, veiculo, local, cortada, user_otimizacao, data_corte, sensor, camada
+            SELECT id, op, peca, projeto, veiculo, local, cortada, user_otimizacao, data_corte, sensor, camada, lote_pc
             FROM public.pc_otimizadas
             WHERE tipo = 'PC'
             ORDER BY id DESC
@@ -1433,6 +1493,7 @@ def api_otimizadas():
                 item['data_corte'] = item['data_corte'].strftime('%d/%m/%Y') if item['data_corte'] else ''
             item['sensor'] = item.get('sensor', '') or ''
             item['camada'] = item.get('camada', '') or ''
+            item['lote_pc'] = item.get('lote_pc', '') or ''
             resultado.append(item)
         
         return jsonify(resultado)
@@ -1518,6 +1579,9 @@ def enviar_estoque():
         """, ids)
         pecas = cur.fetchall()
         
+        # Preparar dados para inserção em lote no controle
+        dados_controle = []
+        
         # Verificar duplicatas e inserir no estoque
         for peca in pecas:
             # Verificar se já existe no estoque (considerando camada se existir)
@@ -1546,6 +1610,34 @@ def enviar_estoque():
                 peca.get('lote_pc', ''),
                 peca.get('camada', '')
             ))
+            
+            # Adicionar dados para pc_controle
+            dados_controle.append((
+                peca['op'],  # op_pai
+                peca['op'],  # op
+                peca['peca'],  # peca
+                peca['projeto'],  # projeto
+                peca['veiculo'],  # veiculo
+                peca['local'],  # local
+                peca['local'],  # rack
+                True,  # cortada
+                current_user.username,  # user_otimizacao
+                'PC',  # tipo
+                peca.get('camada', '')  # camada
+            ))
+        
+        # Inserção em lote no controle
+        if dados_controle:
+            try:
+                print(f"DEBUG CONTROLE: Inserindo {len(dados_controle)} registros na tabela pc_controle")
+                cur.executemany("""
+                    INSERT INTO public.pc_controle (op_pai, op, peca, projeto, veiculo, local, rack, cortada, user_otimizacao, tipo, camada)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, dados_controle)
+                print(f"DEBUG CONTROLE: Inserção realizada com sucesso")
+            except Exception as controle_error:
+                print(f"DEBUG CONTROLE: Erro na inserção: {controle_error}")
+                # Continuar mesmo com erro no controle para não afetar o fluxo principal
         
         # Verificar se todas as peças do lote estão no estoque e atualizar status
         lotes_processados = set()
@@ -1731,6 +1823,18 @@ def adicionar_arquivo():
             conn.commit()
         except:
             pass
+        
+        # Verificar se já existe um arquivo idêntico
+        cur.execute("""
+            SELECT COUNT(*) FROM public.arquivos_pc 
+            WHERE projeto = %s AND peca = %s AND nome_peca = %s AND camada = %s AND sensor = %s
+        """, (projeto, peca, nome_peca, camada, sensor))
+        
+        if cur.fetchone()[0] > 0:
+            conn.close()
+            response = jsonify({'success': False, 'message': 'Arquivo já existe com os mesmos dados'})
+            response.headers.add('Access-Control-Allow-Origin', '*')
+            return response
         
         cur.execute("""
             INSERT INTO public.arquivos_pc (projeto, peca, nome_peca, camada, espessura, quantidade, sensor)
@@ -1978,6 +2082,42 @@ def popular_locais_iniciais():
             )
         """)
         
+        # Criar tabela pc_camadas se não existir
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS public.pc_camadas (
+                id SERIAL PRIMARY KEY,
+                projeto TEXT,
+                peca TEXT,
+                l3 TEXT,
+                l3_b TEXT,
+                l4 TEXT,
+                l5 TEXT,
+                l6 TEXT,
+                l7 TEXT,
+                l8 TEXT,
+                pecas_especiais TEXT
+            )
+        """)
+        
+        # Criar tabela pc_controle se não existir
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS public.pc_controle (
+                id SERIAL PRIMARY KEY,
+                op_pai TEXT,
+                op TEXT,
+                peca TEXT,
+                projeto TEXT,
+                veiculo TEXT,
+                local TEXT,
+                rack TEXT,
+                cortada BOOLEAN DEFAULT FALSE,
+                user_otimizacao TEXT,
+                data_otimizacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                tipo TEXT DEFAULT 'PC',
+                camada TEXT
+            )
+        """)
+        
         # Adicionar colunas se não existirem na tabela pc_baixas
         try:
             cur.execute("ALTER TABLE public.pc_baixas ADD COLUMN IF NOT EXISTS veiculo TEXT")
@@ -1986,6 +2126,13 @@ def popular_locais_iniciais():
             cur.execute("ALTER TABLE public.pc_baixas ADD COLUMN IF NOT EXISTS processado_por TEXT")
             cur.execute("ALTER TABLE public.pc_baixas ADD COLUMN IF NOT EXISTS data_processamento TIMESTAMP")
             cur.execute("ALTER TABLE public.pc_baixas ADD COLUMN IF NOT EXISTS data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+            conn.commit()
+        except:
+            pass
+        
+        # Adicionar coluna pecas_especiais se não existir na tabela pc_camadas
+        try:
+            cur.execute("ALTER TABLE public.pc_camadas ADD COLUMN IF NOT EXISTS pecas_especiais TEXT")
             conn.commit()
         except:
             pass
@@ -2123,7 +2270,7 @@ def api_saidas():
     try:
         conn = get_db_connection()
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-        cur.execute("SELECT id, op, peca, projeto, veiculo, local, usuario, data FROM public.pc_exit ORDER BY id DESC LIMIT 100")
+        cur.execute("SELECT id, op, peca, projeto, veiculo, local, usuario, data FROM public.pc_exit ORDER BY data DESC")
         dados = cur.fetchall()
         conn.close()
         
@@ -2182,21 +2329,18 @@ def gerar_xml():
                 camadas_result = cur.fetchone()
                 print(f"DEBUG XML: Camadas encontradas para {projeto} {peca_codigo}: {dict(camadas_result) if camadas_result else 'Nenhuma'}")
                 
-                # Verificar se há peças especiais definidas
-                pecas_para_gerar = [peca_codigo]  # Sempre incluir a peça original
+                # Verificar se há peças especiais definidas na tabela pc_camadas
+                pecas_para_gerar = [peca_codigo]  # Padrão: peça original
+                
                 if camadas_result and camadas_result.get('pecas_especiais'):
                     pecas_especiais_str = camadas_result['pecas_especiais'].strip()
                     if pecas_especiais_str and pecas_especiais_str != '-':
                         # Parse do formato "TSA - TSB" -> ['TSA', 'TSB']
                         pecas_especiais = [p.strip() for p in pecas_especiais_str.split('-') if p.strip()]
-                        pecas_para_gerar = pecas_especiais  # Usar as peças especiais ao invés da original
-                        print(f"DEBUG XML: Peças especiais encontradas: {pecas_especiais}")
-                
-                print(f"DEBUG XML: Peças que serão processadas: {pecas_para_gerar}")
+                        pecas_para_gerar = pecas_especiais  # Usar as peças especiais da DB
                 
                 # Processar cada peça (original ou especiais)
                 for peca_atual in pecas_para_gerar:
-                    print(f"DEBUG XML: Processando peça: {peca_atual}")
                     
                     # Lista para armazenar as camadas válidas desta peça
                     camadas_para_processar = []
@@ -2205,11 +2349,8 @@ def gerar_xml():
                         # Processar apenas colunas específicas de camadas conhecidas
                         colunas_camadas_conhecidas = ['l3', 'l3_b', 'l4', 'l5', 'l6', 'l7', 'l8']
                         colunas_encontradas = [col for col in camadas_result.keys() if col in colunas_camadas_conhecidas]
-                        print(f"DEBUG XML: Colunas de camadas válidas encontradas: {colunas_encontradas}")
-                        
                         for coluna in colunas_encontradas:
                             valor_camada = camadas_result[coluna]
-                            print(f"DEBUG XML: Coluna {coluna} = '{valor_camada}' (tipo: {type(valor_camada)})")
                             # Processar apenas se existir e for diferente de "-" ou vazio
                             if valor_camada and str(valor_camada).strip() not in ['-', '', 'None', 'NULL', 'null']:
                                 try:
@@ -2217,18 +2358,13 @@ def gerar_xml():
                                     if quantidade > 0:
                                         # Gerar apenas 1 XML por camada, independente da quantidade
                                         camadas_para_processar.append((coluna.upper(), '01', 1, quantidade))
-                                        print(f"DEBUG XML: Camada {coluna.upper()} adicionada (quantidade: {quantidade})")
                                 except (ValueError, TypeError):
                                     # Se não conseguir converter para número, tratar como 1
                                     camadas_para_processar.append((coluna.upper(), '01', 1, 1))
-                            else:
-                                print(f"DEBUG XML: Camada {coluna} ignorada (valor inválido)")
-                        
-                        print(f"DEBUG XML: Total de camadas para processar: {len(camadas_para_processar)}")
+
                 
                     # Se não encontrou camadas válidas, tentar buscar arquivo genérico
                     if not camadas_para_processar:
-                        print(f"DEBUG XML: Nenhuma camada válida encontrada para {projeto} {peca_atual}, buscando arquivo genérico")
                         # Buscar qualquer arquivo do projeto/peça
                         cur.execute("""
                             SELECT nome_peca, espessura FROM public.arquivos_pc
@@ -2241,7 +2377,6 @@ def gerar_xml():
                         if arquivo_generico:
                             # Adicionar como camada genérica com 4 valores
                             camadas_para_processar.append(('GENERICO', '01', 1, 1))
-                            print(f"DEBUG XML: Arquivo genérico encontrado, adicionado como GENERICO")
                         else:
                             if camadas_result:
                                 # Mostrar todas as camadas encontradas no log
@@ -2257,17 +2392,7 @@ def gerar_xml():
                     
                     # Tratar sensor '-' ou inválido
                     if sensor_peca in ['-', '', 'None', 'NULL', 'null']:
-                        # Buscar sensor do PBS da mesma OP
-                        cur.execute("""
-                            SELECT sensor FROM public.plano_controle_corte_vidro2
-                            WHERE op = %s AND peca = 'PBS' AND sensor IS NOT NULL AND sensor != '' AND sensor != '-'
-                            LIMIT 1
-                        """, (op,))
-                        pbs_sensor = cur.fetchone()
-                        sensor_peca = pbs_sensor['sensor'] if pbs_sensor else '1'
-                    
-                    # Buscar arquivos com sensor exato primeiro
-                    print(f"DEBUG XML: Buscando arquivos para projeto={projeto}, peca={peca_atual}, sensor={sensor_peca}")
+                        sensor_peca = '1'
                     
                     cur.execute("""
                         SELECT nome_peca, espessura FROM public.arquivos_pc
@@ -2290,7 +2415,7 @@ def gerar_xml():
                         """, (str(projeto), str(peca_atual), f'%_{sensor_peca}'))
                         arquivos_disponiveis = cur.fetchall()
                     
-                    print(f"DEBUG XML: Encontrados {len(arquivos_disponiveis)} arquivos para {projeto} {peca_atual}")
+
                     
                     if not arquivos_disponiveis:
                         xmls_nao_gerados.append(f"{projeto} {peca_atual} - Nenhum arquivo encontrado na tabela arquivos_pc")
@@ -2329,8 +2454,6 @@ def gerar_xml():
                         
                         nome_peca = arquivo_selecionado['nome_peca']
                         espessura = arquivo_selecionado.get('espessura', '1.0')
-                        
-                        print(f"DEBUG XML: Peça {peca_atual} - Camada {camada_nome} usando arquivo: {nome_peca}")
                         
                         # Gerar OP diferenciada para cada peça e camada
                         peca_index = pecas_para_gerar.index(peca_atual)
@@ -2372,8 +2495,6 @@ def gerar_xml():
                         zip_file.writestr(xml_filename, pretty_xml)
                         
                         xmls_gerados.append(f"OP {op_diferenciada} - Peça {peca_atual} - {camada_nome} (Qtd: {total_items}) - {nome_peca}")
-                        
-                        print(f"DEBUG XML: XML gerado: {xml_filename} com OP {op_diferenciada} (Qtd: {total_items}) usando arquivo {nome_peca}")
         
         # Log da ação com detalhes
         if xmls_nao_gerados:
@@ -2408,35 +2529,53 @@ def gerar_xml():
             for item in xmls_nao_gerados:
                 mensagem += f'\n• {item}'
         
-        # Salvar ZIP na pasta do SharePoint
-        zip_saved_sharepoint = False
-        sharepoint_paths = [
-            os.path.expanduser(r"~\CARBON CARS\Programação e Controle de Produção - DocumentosPCP\AUTOMACAO LIBELLULA - PC"),
-            os.path.expanduser(r"~\OneDrive - CARBON CARS\Programação e Controle de Produção - DocumentosPCP\AUTOMACAO LIBELLULA - PC"),
-            os.path.expanduser(r"~\OneDrive\CARBON CARS\Programação e Controle de Produção - DocumentosPCP\AUTOMACAO LIBELLULA - PC"),
-            os.path.expanduser(r"~\Documents\XMLs")
+        # Tentar salvar na pasta da rede primeiro
+        zip_saved_network = False
+        network_paths = [
+            r"\\10.150.16.39\cnc-policarbonato" # Caminho UNC da rede
         ]
         
         zip_filename = f'xmls_otimizacao_{timestamp}.zip'
         
-        for sharepoint_path in sharepoint_paths:
+        for network_path in network_paths:
             try:
-                if os.path.exists(sharepoint_path):
-                    zip_file_path = os.path.join(sharepoint_path, zip_filename)
-                    with open(zip_file_path, 'wb') as f:
-                        f.write(zip_buffer.getvalue())
-                    zip_saved_sharepoint = True
-                    mensagem += f"\n\nArquivo ZIP salvo em: {sharepoint_path}"
-                    break
-            except Exception:
+                # Testar se o caminho de rede está acessível
+                if network_path.startswith(r"\\"):
+                    test_path = os.path.dirname(network_path)
+                    if not os.path.exists(test_path):
+                        continue
+                
+                os.makedirs(network_path, exist_ok=True)
+                zip_file_path = os.path.join(network_path, zip_filename)
+                with open(zip_file_path, 'wb') as f:
+                    f.write(zip_buffer.getvalue())
+                zip_saved_network = True
+                mensagem += f"\n\nArquivo ZIP salvo em: {zip_file_path}"
+                break
+            except Exception as e:
                 continue
         
-        if not zip_saved_sharepoint:
-            mensagem += "\n\nAVISO: Não foi possível salvar em pasta sincronizada."
+        # Se não conseguiu salvar na rede, preparar para download
+        if not zip_saved_network:
+            # Salvar temporariamente para download
+            import tempfile
+            temp_dir = tempfile.gettempdir()
+            temp_file = os.path.join(temp_dir, zip_filename)
+            with open(temp_file, 'wb') as f:
+                f.write(zip_buffer.getvalue())
+            
+            mensagem += f"\n\nArquivo preparado para download: {zip_filename}"
+            return jsonify({
+                'success': True,
+                'message': mensagem,
+                'download': True,
+                'filename': zip_filename
+            })
         
         return jsonify({
             'success': True,
-            'message': mensagem
+            'message': mensagem,
+            'download': False
         })
     except Exception as e:
         import traceback
@@ -2564,6 +2703,55 @@ def gerar_excel_estoque():
     except Exception as e:
         return jsonify({'success': False, 'message': f'Erro ao gerar Excel: {str(e)}'}), 500
 
+@app.route('/api/gerar-excel-otimizadas', methods=['POST'])
+@login_required
+def gerar_excel_otimizadas():
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        
+        cur.execute("""
+            SELECT op, peca, projeto, veiculo, local, sensor, camada, lote_pc, data_corte
+            FROM public.pc_otimizadas
+            WHERE tipo = 'PC'
+            ORDER BY id DESC
+        """)
+        dados = cur.fetchall()
+        conn.close()
+        
+        if not dados:
+            return jsonify({'success': False, 'message': 'Nenhuma peça otimizada encontrada'})
+        
+        df = pd.DataFrame([dict(row) for row in dados])
+        df = df.rename(columns={
+            'op': 'OP',
+            'peca': 'PEÇA',
+            'projeto': 'PROJETO',
+            'veiculo': 'VEÍCULO',
+            'local': 'LOCAL',
+            'sensor': 'SENSOR',
+            'camada': 'CAMADA',
+            'lote_pc': 'LOTE PC',
+            'data_corte': 'DATA CORTE'
+        })
+        
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f'pecas_otimizadas_{timestamp}.xlsx'
+        
+        output = io.BytesIO()
+        df.to_excel(output, index=False, engine='openpyxl')
+        output.seek(0)
+        
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=filename
+        )
+    
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Erro ao gerar Excel: {str(e)}'}), 500
+
 @app.route('/api/gerar-excel-saidas', methods=['POST'])
 @login_required
 def gerar_excel_saidas():
@@ -2641,6 +2829,72 @@ def gerar_excel_logs():
     except Exception as e:
         return jsonify({'success': False, 'message': f'Erro ao gerar Excel: {str(e)}'}), 500
 
+@app.route('/api/gerar-excel-dashboard', methods=['POST'])
+@login_required
+def gerar_excel_dashboard():
+    try:
+        dados = request.get_json()
+        dados_dashboard = dados.get('dados', [])
+        aba_ativa = dados.get('aba_ativa', 'premontagem')
+        
+        if not dados_dashboard:
+            return jsonify({'success': False, 'message': 'Nenhum dado encontrado'})
+        
+        # Filtrar dados baseado na aba ativa
+        if aba_ativa == 'premontagem':
+            dados_filtrados = [item for item in dados_dashboard if item.get('status') == 'aviso']
+            nome_aba = 'Pré-Montagem'
+        else:
+            dados_filtrados = [item for item in dados_dashboard if item.get('status') in ['plano', 'curvo', 'critico']]
+            nome_aba = 'Críticas'
+        
+        if not dados_filtrados:
+            return jsonify({'success': False, 'message': f'Nenhum dado encontrado para a aba {nome_aba}'})
+        
+        # Preparar dados para Excel
+        dados_excel = []
+        for item in dados_filtrados:
+            # Mapear status para categoria descritiva
+            status_map = {
+                'aviso': 'Peças no Corte Curvo - Pré-Montagem',
+                'plano': 'Bloco Plano - Peças Sem PC',
+                'curvo': 'Bloco Curvo - Peças Sem PC', 
+                'critico': 'Peças que já passaram da Montagem'
+            }
+            
+            categoria = status_map.get(item.get('status', ''), item.get('status', '').upper())
+            
+            dados_excel.append({
+                'OP': item.get('op', ''),
+                'PEÇA': item.get('peca', ''),
+                'PROJETO': item.get('projeto', ''),
+                'VEÍCULO': item.get('veiculo', ''),
+                'LOCAL': item.get('local', ''),
+                'ETAPA': item.get('etapa', ''),
+                'PRIORIDADE': item.get('prioridade', ''),
+                'CATEGORIA': categoria,
+                'QUANTIDADE': item.get('quantidade', 1)
+            })
+        
+        df = pd.DataFrame(dados_excel)
+        
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f'dashboard_producao_{timestamp}.xlsx'
+        
+        output = io.BytesIO()
+        df.to_excel(output, index=False, engine='openpyxl', sheet_name=nome_aba)
+        output.seek(0)
+        
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=filename
+        )
+    
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Erro ao gerar Excel: {str(e)}'}), 500
+
 @app.route('/api/baixar-peca', methods=['POST'])
 @login_required
 def baixar_peca():
@@ -2648,7 +2902,7 @@ def baixar_peca():
         dados = request.get_json()
         peca_id = dados.get('id')
         motivo_baixa = dados.get('motivo_baixa', '').strip()
-        origem = dados.get('origem')  # 'estoque' ou 'otimizadas'
+        origem = dados.get('origem')  # 'estoque', 'otimizadas' ou 'saidas'
         
         if not peca_id or not motivo_baixa or not origem:
             return jsonify({'success': False, 'message': 'Dados incompletos'})
@@ -2659,8 +2913,10 @@ def baixar_peca():
         # Buscar peça na origem
         if origem == 'estoque':
             cur.execute("SELECT * FROM public.pc_inventory WHERE id = %s", (peca_id,))
-        else:
+        elif origem == 'otimizadas':
             cur.execute("SELECT * FROM public.pc_otimizadas WHERE id = %s", (peca_id,))
+        elif origem == 'saidas':
+            cur.execute("SELECT * FROM public.pc_exit WHERE id = %s", (peca_id,))
         
         peca = cur.fetchone()
         if not peca:
@@ -2686,8 +2942,10 @@ def baixar_peca():
         # Remover da origem
         if origem == 'estoque':
             cur.execute("DELETE FROM public.pc_inventory WHERE id = %s", (peca_id,))
-        else:
+        elif origem == 'otimizadas':
             cur.execute("DELETE FROM public.pc_otimizadas WHERE id = %s", (peca_id,))
+        elif origem == 'saidas':
+            cur.execute("DELETE FROM public.pc_exit WHERE id = %s", (peca_id,))
         
         conn.commit()
         conn.close()
@@ -2900,36 +3158,37 @@ def reprocessar_baixa():
                 if sensor_peca and sensor_peca not in ['-', '', 'None', 'NULL', 'null']:
                     cur.execute("""
                         SELECT nome_peca, espessura FROM public.arquivos_pc
-                        WHERE projeto = %s AND peca = %s AND (sensor = %s OR nome_peca LIKE %s)
-                        ORDER BY 
-                            CASE WHEN sensor = %s THEN 1 ELSE 2 END,
-                            CASE WHEN nome_peca LIKE %s THEN 1 ELSE 2 END,
-                            id DESC
-                    """, (baixa['projeto'], baixa['peca'], sensor_peca, f'%_{sensor_peca}', sensor_peca, f'%_{sensor_peca}'))
+                        WHERE UPPER(TRIM(CAST(projeto AS TEXT))) = UPPER(TRIM(CAST(%s AS TEXT))) 
+                        AND UPPER(TRIM(CAST(peca AS TEXT))) = UPPER(TRIM(CAST(%s AS TEXT)))
+                        AND UPPER(TRIM(CAST(sensor AS TEXT))) = UPPER(TRIM(CAST(%s AS TEXT)))
+                        ORDER BY id DESC
+                    """, (str(baixa['projeto']), str(baixa['peca']), str(sensor_peca)))
+                    
+                    arquivos_encontrados = cur.fetchall()
+                    
+                    # Se não encontrou com sensor exato, buscar por nome_peca que contenha o sensor
+                    if not arquivos_encontrados:
+                        cur.execute("""
+                            SELECT nome_peca, espessura FROM public.arquivos_pc
+                            WHERE UPPER(TRIM(CAST(projeto AS TEXT))) = UPPER(TRIM(CAST(%s AS TEXT))) 
+                            AND UPPER(TRIM(CAST(peca AS TEXT))) = UPPER(TRIM(CAST(%s AS TEXT)))
+                            AND nome_peca LIKE %s
+                            ORDER BY id DESC
+                        """, (str(baixa['projeto']), str(baixa['peca']), f'%_{sensor_peca}'))
+                        arquivos_encontrados = cur.fetchall()
                 else:
                     cur.execute("""
                         SELECT nome_peca, espessura FROM public.arquivos_pc
-                        WHERE projeto = %s AND peca = %s
+                        WHERE UPPER(TRIM(CAST(projeto AS TEXT))) = UPPER(TRIM(CAST(%s AS TEXT))) 
+                        AND UPPER(TRIM(CAST(peca AS TEXT))) = UPPER(TRIM(CAST(%s AS TEXT)))
                         ORDER BY id DESC
-                    """, (baixa['projeto'], baixa['peca']))
+                    """, (str(baixa['projeto']), str(baixa['peca'])))
+                    arquivos_encontrados = cur.fetchall()
                 
-                arquivos_encontrados = cur.fetchall()
                 
                 if not arquivos_encontrados:
-                    # Debug: tentar busca sem filtro de sensor
-                    cur.execute("""
-                        SELECT nome_peca, espessura FROM public.arquivos_pc
-                        WHERE projeto = %s AND peca = %s
-                        ORDER BY id DESC
-                    """, (baixa['projeto'], baixa['peca']))
-                    arquivos_sem_sensor = cur.fetchall()
-                    
-                    if arquivos_sem_sensor:
-                        print(f"DEBUG BAIXAS: Encontrou {len(arquivos_sem_sensor)} arquivo(s) sem filtro de sensor para {baixa['projeto']} {baixa['peca']}")
-                        arquivos_encontrados = arquivos_sem_sensor
-                    else:
-                        print(f"DEBUG BAIXAS: Nenhum arquivo encontrado para projeto={baixa['projeto']}, peca={baixa['peca']}, sensor={sensor_peca}")
-                        continue
+                    print(f"DEBUG BAIXAS: Nenhum arquivo encontrado para projeto={baixa['projeto']}, peca={baixa['peca']}, sensor={sensor_peca}")
+                    continue
                 
                 # Para cada camada, usar o arquivo correspondente se existir múltiplos
                 if len(arquivos_encontrados) > idx:
@@ -2968,12 +3227,12 @@ def reprocessar_baixa():
                 reparsed = minidom.parseString(rough_string)
                 pretty_xml = reparsed.toprettyxml(indent='  ', encoding='utf-8')
                 
-                # Salvar XML na pasta do SharePoint
-                sharepoint_paths = [
-                    os.path.expanduser(r"~\CARBON CARS\Programação e Controle de Produção - DocumentosPCP\AUTOMACAO LIBELLULA - PC"),
-                    os.path.expanduser(r"~\OneDrive - CARBON CARS\Programação e Controle de Produção - DocumentosPCP\AUTOMACAO LIBELLULA - PC"),
-                    os.path.expanduser(r"~\OneDrive\CARBON CARS\Programação e Controle de Produção - DocumentosPCP\AUTOMACAO LIBELLULA - PC"),
-                    os.path.expanduser(r"~\Documents\XMLs")
+                # Salvar XML na pasta da rede (Windows)
+                network_paths = [
+                    r"\\10.150.16.39\cnc-policarbonato",  # Caminho UNC da rede
+                    r"Z:\cnc-policarbonato",  # Drive mapeado (se existir)
+                    os.path.expanduser(r"~\Documents\XMLs"),  # Pasta local como fallback
+                    r"C:\temp\xmls"  # Pasta temporária como fallback
                 ]
                 
                 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -2982,24 +3241,30 @@ def reprocessar_baixa():
                 else:
                     xml_filename = f"{baixa['op']}_{baixa['projeto']}_{baixa['peca']}_{camada_nome}_reprocessado_{timestamp}.xml"
                 
+                # Tentar salvar na pasta da rede
                 xml_salvo = False
-                for sharepoint_path in sharepoint_paths:
+                network_paths_xml = [
+                    r"\\10.150.16.39\cnc-policarbonato"
+                    ]
+                
+                for network_path in network_paths_xml:
                     try:
-                        if os.path.exists(sharepoint_path):
-                            xml_file_path = os.path.join(sharepoint_path, xml_filename)
-                            with open(xml_file_path, 'wb') as f:
-                                f.write(pretty_xml)
-                            xml_salvo = True
-                            if total_items > 1:
-                                xmls_gerados.append(f"OP {op_diferenciada} - Peça {baixa['peca']} - {camada_nome} #{item_num}/{total_items} - {nome_peca}")
-                            else:
-                                xmls_gerados.append(f"OP {op_diferenciada} - Peça {baixa['peca']} - {camada_nome} - {nome_peca}")
-                            if total_items > 1:
-                                print(f"DEBUG BAIXAS: XML gerado: {xml_filename} com OP {op_diferenciada} (item {item_num}/{total_items})")
-                            else:
-                                print(f"DEBUG BAIXAS: XML gerado: {xml_filename} com OP {op_diferenciada}")
-                            break
-                    except Exception:
+                        if network_path.startswith(r"\\"):
+                            test_path = os.path.dirname(network_path)
+                            if not os.path.exists(test_path):
+                                continue
+                        
+                        os.makedirs(network_path, exist_ok=True)
+                        xml_file_path = os.path.join(network_path, xml_filename)
+                        with open(xml_file_path, 'wb') as f:
+                            f.write(pretty_xml)
+                        xml_salvo = True
+                        if total_items > 1:
+                            xmls_gerados.append(f"OP {op_diferenciada} - Peça {baixa['peca']} - {camada_nome} #{item_num}/{total_items} - {nome_peca}")
+                        else:
+                            xmls_gerados.append(f"OP {op_diferenciada} - Peça {baixa['peca']} - {camada_nome} - {nome_peca}")
+                        break
+                    except Exception as e:
                         continue
         
         except Exception as xml_error:
@@ -3450,6 +3715,143 @@ def editar_peca_estoque():
             'message': f'Peça {peca} OP {op} atualizada com sucesso!'
         })
         
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Erro: {str(e)}'}), 500
+
+
+
+
+
+@app.route('/api/editar-peca-otimizada', methods=['PUT'])
+@login_required
+def editar_peca_otimizada():
+    try:
+        dados = request.get_json()
+        peca_id = dados.get('id')
+        op = dados.get('op', '').strip()
+        peca = dados.get('peca', '').strip()
+        projeto = dados.get('projeto', '').strip()
+        veiculo = dados.get('veiculo', '').strip()
+        local = dados.get('local', '').strip()
+        sensor = dados.get('sensor', '').strip()
+        
+        if not peca_id:
+            return jsonify({'success': False, 'message': 'ID da peça não informado'})
+        
+        if not all([op, peca, projeto, veiculo, local]):
+            return jsonify({'success': False, 'message': 'OP, Peça, Projeto, Veículo e Local são obrigatórios'})
+        
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        
+        # Verificar se a peça existe
+        cur.execute("SELECT * FROM public.pc_otimizadas WHERE id = %s AND tipo = 'PC'", (peca_id,))
+        peca_atual = cur.fetchone()
+        
+        if not peca_atual:
+            conn.close()
+            return jsonify({'success': False, 'message': 'Peça não encontrada nas otimizadas'})
+        
+        # Verificar se não há duplicata (exceto a própria peça)
+        cur.execute("""
+            SELECT COUNT(*) FROM public.pc_otimizadas 
+            WHERE op = %s AND peca = %s AND id != %s AND tipo = 'PC'
+        """, (op, peca, peca_id))
+        
+        if cur.fetchone()[0] > 0:
+            conn.close()
+            return jsonify({'success': False, 'message': f'Já existe outra peça {peca} OP {op} nas otimizadas!'})
+        
+        # Verificar capacidade do local se mudou
+        if local and local != peca_atual['local']:
+            cur.execute("SELECT limite FROM public.pc_locais WHERE local = %s", (local,))
+            limite_result = cur.fetchone()
+            if limite_result:
+                limite = int(limite_result['limite']) if limite_result['limite'] else 6
+                
+                # Contar peças no local (excluindo a atual)
+                cur.execute("""
+                    SELECT COUNT(*) FROM (
+                        SELECT local FROM public.pc_inventory WHERE local = %s
+                        UNION ALL
+                        SELECT local FROM public.pc_otimizadas WHERE local = %s AND tipo = 'PC' AND id != %s
+                    ) as total_local
+                """, (local, local, peca_id))
+                ocupacao = cur.fetchone()[0]
+                
+                if ocupacao >= limite:
+                    conn.close()
+                    return jsonify({'success': False, 'message': f'Local {local} está cheio! Limite: {limite}, Ocupado: {ocupacao}'})
+        
+        # Atualizar a peça
+        cur.execute("""
+            UPDATE public.pc_otimizadas 
+            SET op = %s, peca = %s, projeto = %s, veiculo = %s, local = %s, sensor = %s
+            WHERE id = %s
+        """, (op, peca, projeto, veiculo, local, sensor, peca_id))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Peça {peca} OP {op} atualizada com sucesso!'
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Erro: {str(e)}'}), 500
+
+@app.route('/api/dar-saida-peca-local', methods=['POST'])
+@login_required
+def dar_saida_peca_local():
+    try:
+        dados = request.get_json()
+        op = dados.get('op')
+        peca = dados.get('peca')
+        local = dados.get('local')
+        
+        if not all([op, peca, local]):
+            return jsonify({'success': False, 'message': 'Dados incompletos'})
+        
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        
+        # Buscar peça no estoque
+        cur.execute("SELECT * FROM public.pc_inventory WHERE op = %s AND peca = %s AND local = %s", (op, peca, local))
+        peca_estoque = cur.fetchone()
+        
+        if not peca_estoque:
+            conn.close()
+            return jsonify({'success': False, 'message': 'Peça não encontrada no estoque'})
+        
+        # Inserir na tabela de saídas
+        cur.execute("""
+            INSERT INTO public.pc_exit (op, peca, projeto, veiculo, sensor, local, usuario, data, motivo, lote_vd, lote_pc)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), %s, %s, %s)
+        """, (
+            peca_estoque['op'],
+            peca_estoque['peca'],
+            peca_estoque.get('projeto', ''),
+            peca_estoque.get('veiculo', ''),
+            peca_estoque.get('sensor', ''),
+            peca_estoque['local'],
+            current_user.username,
+            'SAÍDA VIA TELA DE LOCAIS',
+            peca_estoque.get('lote_vd', ''),
+            peca_estoque.get('lote_pc', '')
+        ))
+        
+        # Remover do estoque
+        cur.execute("DELETE FROM public.pc_inventory WHERE id = %s", (peca_estoque['id'],))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Peça {peca} OP {op} removida do local {local} com sucesso!'
+        })
+    
     except Exception as e:
         return jsonify({'success': False, 'message': f'Erro: {str(e)}'}), 500
 

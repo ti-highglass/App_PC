@@ -111,10 +111,15 @@ SSO_SHARED_SECRET=chave_secreta_sso
 ACOMP_CORTE_BASE_URL=http://url_sistema_corte
 ACOMP_CORTE_SSO_LOGOUT_URL=http://url_logout_corte
 
-# 2. Executar com Docker
+# 2. Configurar pasta de rede para XMLs (Linux)
+# Veja README_NETWORK_SETUP.md para detalhes
+sudo mkdir -p /mnt/cnc-policarbonato
+sudo mount -t cifs //10.150.16.39/cnc-policarbonato /mnt/cnc-policarbonato -o credentials=/etc/cifs-credentials
+
+# 3. Executar com Docker
 docker-compose up -d
 
-# 3. Ou usar script
+# 4. Ou usar script
 docker-start.bat
 ```
 
@@ -123,13 +128,18 @@ docker-start.bat
 # 1. Instalar dependências
 pip install -r lixo/requirements.txt
 
-# 2. Executar aplicação principal
+# 2. Configurar pasta de rede (Linux)
+# Veja README_NETWORK_SETUP.md para configuração completa
+chmod +x mount_network.sh
+sudo ./mount_network.sh
+
+# 3. Executar aplicação principal
 python app.py
 
-# 3. Executar dashboard (opcional)
+# 4. Executar dashboard (opcional)
 python dashboard_app.py
 
-# 4. Ou usar script
+# 5. Ou usar script (Windows)
 "Sistema de PC.bat"
 ```
 

@@ -11,7 +11,7 @@ async function carregarEstoque() {
         tbody.innerHTML = '';
         
         if (!dados || dados.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" class="border border-gray-200 px-4 py-6 text-center text-gray-500">Nenhum item no estoque</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" class="border border-gray-200 px-4 py-6 text-center text-gray-500">Nenhum item no estoque</td></tr>';
             return;
         }
         
@@ -24,7 +24,7 @@ async function carregarEstoque() {
             checkCell.innerHTML = `<input type="checkbox" class="row-checkbox" data-id="${item.id}" onchange="atualizarContadorSelecionadas()">`;
             checkCell.className = 'border border-gray-200 px-4 py-3 text-center';
             
-            [item.op, item.peca, item.projeto, item.veiculo, item.local, item.sensor].forEach(value => {
+            [item.op, item.peca, item.projeto, item.veiculo, item.local, item.sensor, item.lote_pc].forEach(value => {
                 const cell = row.insertCell();
                 cell.textContent = value || '-';
                 cell.className = 'border border-gray-200 px-4 py-3 text-sm text-gray-700';
@@ -48,7 +48,7 @@ async function carregarEstoque() {
     } catch (error) {
         console.error('Erro ao carregar estoque:', error);
         const tbody = document.getElementById('estoque-tbody');
-        tbody.innerHTML = '<tr><td colspan="8" class="border border-gray-200 px-4 py-6 text-center text-red-500">Erro ao carregar dados do estoque</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="border border-gray-200 px-4 py-6 text-center text-red-500">Erro ao carregar dados do estoque</td></tr>';
     }
 }
 
@@ -56,6 +56,7 @@ async function carregarEstoque() {
 
 const filtrarTabelaEstoque = () => {
     const filtro = document.getElementById('campoPesquisaEstoque').value.toLowerCase();
+    const tipoFiltro = document.getElementById('tipoFiltroEstoque').value;
     let visibleCount = 0;
     
     document.querySelectorAll('#estoque-tbody tr').forEach(linha => {
@@ -65,12 +66,27 @@ const filtrarTabelaEstoque = () => {
         if (cells.length > 1) {
             const op = cells[1].textContent.toLowerCase();
             const peca = cells[2].textContent.toLowerCase();
+            const projeto = cells[3].textContent.toLowerCase();
+            const veiculo = cells[4].textContent.toLowerCase();
+            const local = cells[5].textContent.toLowerCase();
             
-            // Buscar por peça+op+camada (formato: TSP12345PC)
-            const pecaOpCamada = `${peca}${op}pc`;
-            
-            match = linha.textContent.toLowerCase().includes(filtro) ||
-                   pecaOpCamada.includes(filtro);
+            switch (tipoFiltro) {
+                case 'peca_op':
+                    const pecaOpCamada = `${peca}${op}pc`;
+                    match = pecaOpCamada.includes(filtro) || op.includes(filtro) || peca.includes(filtro);
+                    break;
+                case 'local':
+                    match = local.includes(filtro);
+                    break;
+                case 'data':
+                    // Para data, buscar em toda a linha
+                    match = linha.textContent.toLowerCase().includes(filtro);
+                    break;
+                case 'geral':
+                default:
+                    match = linha.textContent.toLowerCase().includes(filtro);
+                    break;
+            }
         } else {
             match = linha.textContent.toLowerCase().includes(filtro);
         }

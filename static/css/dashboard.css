@@ -138,6 +138,12 @@
     transition: all 0.2s;
 }
 
+.search-input-wide {
+    max-width: 48rem;
+    font-size: 1.1rem;
+    padding: 0.875rem 1.25rem 0.875rem 3.5rem;
+}
+
 .search-input:focus {
     border-color: #3b82f6;
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
@@ -201,10 +207,18 @@
     grid-column: span 1;
 }
 
-/* Aba Pré-Montagem - Layout quatro colunas */
-#abaPremontagem .status-board.four-columns {
-    grid-template-columns: 1fr 1fr 1fr 1fr;
-    gap: 0.5rem;
+/* Aba Pré-Montagem - Layout mais compacto */
+#abaPremontagem .status-board.blocos-layout {
+    grid-template-columns: 1.2fr 0.8fr;
+    gap: 0.75rem;
+}
+
+#abaPremontagem .bloco-plano-section .pecas-grid.two-cols {
+    gap: 0.25rem;
+}
+
+#abaPremontagem .critico-section {
+    min-height: 300px;
 }
 
 /* Título único para pré-montagem */
@@ -218,10 +232,37 @@
     padding-top: 0;
 }
 
-/* Aba Críticas - Layout 1:1:1 */
-#abaCriticas .status-board.blocos-layout {
-    grid-template-columns: 1fr 1fr 1fr;
+/* Aba Críticas - Layout 1:1 mais largo */
+#abaCriticas .status-board.sem-pc-layout {
+    grid-template-columns: 1fr 1fr;
     gap: 1rem;
+}
+
+.bloco-plano-section-wide .pecas-grid.four-cols,
+.bloco-curvo-section-wide .pecas-grid.four-cols {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 0.5rem;
+    grid-auto-rows: minmax(60px, auto);
+}
+
+/* Peças mais espalhadas na aba críticas */
+#abaCriticas .peca-linha {
+    margin-bottom: 0.5rem;
+}
+
+/* Forçar 2-3 fileiras nos containers dos blocos */
+.bloco-plano-section-wide,
+.bloco-curvo-section-wide {
+    min-height: 200px;
+}
+
+.bloco-plano-section .pecas-grid.two-cols,
+.bloco-curvo-section .pecas-grid.two-cols {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 0.5rem;
+    grid-auto-rows: minmax(60px, auto);
 }
 
 .bloco-plano-section .pecas-grid.two-cols,
@@ -510,7 +551,7 @@
     color: #6b7280;
 }
 
-/* Refresh Button */
+/* Action Buttons */
 .refresh-btn {
     position: fixed;
     bottom: 2rem;
@@ -533,6 +574,28 @@
     background: #059669;
 }
 
+.export-btn {
+    position: fixed;
+    bottom: 2rem;
+    right: 6rem;
+    background: #2563eb;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 3.5rem;
+    height: 3.5rem;
+    font-size: 1.25rem;
+    cursor: pointer;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+    z-index: 50;
+}
+
+.export-btn:hover {
+    transform: scale(1.1);
+    background: #1d4ed8;
+}
+
 /* Empty State */
 .empty-state {
     text-align: center;
@@ -552,17 +615,19 @@
         grid-template-columns: 1fr;
     }
     
-    #abaPremontagem .status-board.four-columns {
-        grid-template-columns: 1fr 1fr;
+    #abaPremontagem .status-board.blocos-layout {
+        grid-template-columns: 1fr;
     }
     
-    #abaCriticas .status-board.blocos-layout {
+    #abaCriticas .status-board.sem-pc-layout {
         grid-template-columns: 1fr;
     }
     
     .bloco-plano-section .pecas-grid.two-cols,
-    .bloco-curvo-section .pecas-grid.two-cols {
-        grid-template-columns: 1fr;
+    .bloco-curvo-section .pecas-grid.two-cols,
+    .bloco-plano-section-wide .pecas-grid.four-cols,
+    .bloco-curvo-section-wide .pecas-grid.four-cols {
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     }
     
     .status-column-wide {
@@ -584,9 +649,16 @@
 }
 
 @media (max-width: 768px) {
-    #abaPremontagem .status-board.four-columns {
+    #abaPremontagem .status-board.blocos-layout {
         grid-template-columns: 1fr;
     }
+    
+    .bloco-plano-section-wide .pecas-grid.four-cols,
+    .bloco-curvo-section-wide .pecas-grid.four-cols {
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    }
+    
+
 }
 
 @media (max-width: 768px) {

@@ -1,3 +1,9 @@
+let paginaAtual = 1;
+let totalPaginas = 1;
+const itensPorPagina = 50;
+let dadosCompletos = [];
+let dadosFiltrados = [];
+
 document.addEventListener('DOMContentLoaded', function() {
     carregarSaidas();
 });
@@ -7,37 +13,86 @@ async function carregarSaidas() {
         const response = await fetch('/api/saidas');
         const dados = await response.json();
         
-        const tbody = document.getElementById('saidas-tbody');
-        tbody.innerHTML = '';
+        dadosCompletos = dados;
+        dadosFiltrados = dados;
         
         if (!dados || dados.length === 0) {
+            const tbody = document.getElementById('saidas-tbody');
             tbody.innerHTML = '<tr><td colspan="8" class="border border-gray-200 px-4 py-6 text-center text-gray-500">Nenhuma saída registrada</td></tr>';
+            document.getElementById('paginacao').style.display = 'none';
             return;
         }
         
-        dados.forEach(item => {
-            const row = tbody.insertRow();
-            row.className = 'hover:bg-gray-50';
-            
-            [item.op, item.peca, item.projeto, item.veiculo, item.local, item.usuario, item.data].forEach(value => {
-                const cell = row.insertCell();
-                cell.textContent = value || '-';
-                cell.className = 'border border-gray-200 px-4 py-3 text-sm text-gray-700';
-            });
-            
-            const acaoCell = row.insertCell();
-            acaoCell.className = 'border border-gray-200 px-4 py-3 text-center';
-            acaoCell.innerHTML = `
-                <button onclick="voltarEstoque(${item.id})" class="btn-green" title="Voltar para o estoque">
-                    <i class="fas fa-undo mr-1"></i>Voltar
-                </button>
-            `;
-        });
+        totalPaginas = Math.ceil(dadosFiltrados.length / itensPorPagina);
+        renderizarPagina();
+        atualizarPaginacao();
         
     } catch (error) {
         console.error('Erro ao carregar saídas:', error);
         const tbody = document.getElementById('saidas-tbody');
         tbody.innerHTML = '<tr><td colspan="8" class="border border-gray-200 px-4 py-6 text-center text-red-500">Erro ao carregar dados das saídas</td></tr>';
+        document.getElementById('paginacao').style.display = 'none';
+    }
+}
+
+function renderizarPagina() {
+    const tbody = document.getElementById('saidas-tbody');
+    tbody.innerHTML = '';
+    
+    const inicio = (paginaAtual - 1) * itensPorPagina;
+    const fim = inicio + itensPorPagina;
+    const dadosPagina = dadosFiltrados.slice(inicio, fim);
+    
+    dadosPagina.forEach(item => {
+        const row = tbody.insertRow();
+        row.className = 'hover:bg-gray-50';
+        
+        [item.op, item.peca, item.projeto, item.veiculo, item.local, item.usuario].forEach(value => {
+            const cell = row.insertCell();
+            cell.textContent = value || '-';
+            cell.className = 'border border-gray-200 px-4 py-3 text-sm text-gray-700';
+        });
+        
+        // Data column - show only date part
+        const dataCell = row.insertCell();
+        const dataFormatada = item.data ? item.data.split(' ')[0] : '-';
+        dataCell.textContent = dataFormatada;
+        dataCell.className = 'border border-gray-200 px-4 py-3 text-sm text-gray-700';
+        
+        // Actions column
+        const acaoCell = row.insertCell();
+        acaoCell.className = 'border border-gray-200 px-4 py-3 text-center';
+        acaoCell.innerHTML = `
+            <button onclick="abrirModalBaixa('${item.id}', 'saidas')" class="btn-yellow text-white" title="Baixa">
+                Baixa
+            </button>
+        `;
+    });
+}
+
+function atualizarPaginacao() {
+    const paginacao = document.getElementById('paginacao');
+    const btnAnterior = document.getElementById('btnAnterior');
+    const btnProximo = document.getElementById('btnProximo');
+    const infoPagina = document.getElementById('infoPagina');
+    
+    if (totalPaginas <= 1) {
+        paginacao.style.display = 'none';
+        return;
+    }
+    
+    paginacao.style.display = 'flex';
+    btnAnterior.disabled = paginaAtual === 1;
+    btnProximo.disabled = paginaAtual === totalPaginas;
+    infoPagina.textContent = `Página ${paginaAtual} de ${totalPaginas}`;
+}
+
+function mudarPagina(direcao) {
+    const novaPagina = paginaAtual + direcao;
+    if (novaPagina >= 1 && novaPagina <= totalPaginas) {
+        paginaAtual = novaPagina;
+        renderizarPagina();
+        atualizarPaginacao();
     }
 }
 
@@ -66,25 +121,36 @@ async function voltarEstoque(id) {
 
 const filtrarTabelaSaidas = () => {
     const filtro = document.getElementById('campoPesquisaSaidas').value.toLowerCase();
-    document.querySelectorAll('#saidas-tbody tr').forEach(linha => {
-        const cells = linha.querySelectorAll('td');
-        let match = false;
-        
-        if (cells.length > 1) {
-            const op = cells[0].textContent.toLowerCase();
-            const peca = cells[1].textContent.toLowerCase();
+    
+    if (!filtro) {
+        dadosFiltrados = dadosCompletos;
+    } else {
+        dadosFiltrados = dadosCompletos.filter(item => {
+            const op = (item.op || '').toLowerCase();
+            const peca = (item.peca || '').toLowerCase();
+            const projeto = (item.projeto || '').toLowerCase();
+            const veiculo = (item.veiculo || '').toLowerCase();
+            const local = (item.local || '').toLowerCase();
+            const usuario = (item.usuario || '').toLowerCase();
+            const data = (item.data || '').toLowerCase();
             
-            // Buscar por peça+op+camada (formato: TSP12345PC)
             const pecaOpCamada = `${peca}${op}pc`;
             
-            match = linha.textContent.toLowerCase().includes(filtro) ||
+            return op.includes(filtro) ||
+                   peca.includes(filtro) ||
+                   projeto.includes(filtro) ||
+                   veiculo.includes(filtro) ||
+                   local.includes(filtro) ||
+                   usuario.includes(filtro) ||
+                   data.includes(filtro) ||
                    pecaOpCamada.includes(filtro);
-        } else {
-            match = linha.textContent.toLowerCase().includes(filtro);
-        }
-        
-        linha.style.display = match ? '' : 'none';
-    });
+        });
+    }
+    
+    paginaAtual = 1;
+    totalPaginas = Math.ceil(dadosFiltrados.length / itensPorPagina);
+    renderizarPagina();
+    atualizarPaginacao();
 };
 
 function showPopup(message, isError = false) {
@@ -134,21 +200,15 @@ async function gerarExcel() {
             return;
         }
         
-        const dados = [];
-        rows.forEach(row => {
-            if (row.style.display !== 'none') {
-                const cells = row.cells;
-                dados.push({
-                    op: cells[0].textContent.trim(),
-                    peca: cells[1].textContent.trim(),
-                    projeto: cells[2].textContent.trim(),
-                    veiculo: cells[3].textContent.trim(),
-                    local: cells[4].textContent.trim(),
-                    usuario: cells[5].textContent.trim(),
-                    data: cells[6].textContent.trim()
-                });
-            }
-        });
+        const dados = dadosFiltrados.map(item => ({
+            op: item.op || '',
+            peca: item.peca || '',
+            projeto: item.projeto || '',
+            veiculo: item.veiculo || '',
+            local: item.local || '',
+            usuario: item.usuario || '',
+            data: item.data ? item.data.split(' ')[0] : ''
+        }));
         
         if (dados.length === 0) {
             showPopup('Nenhum dado filtrado para exportar', true);
@@ -175,11 +235,10 @@ async function gerarExcel() {
 }
 
 const sortTable = (columnIndex) => {
-    const table = document.getElementById('tabela-saidas');
-    const tbody = table.querySelector('tbody');
-    const rows = Array.from(tbody.querySelectorAll('tr'));
+    const columns = ['op', 'peca', 'projeto', 'veiculo', 'local', 'usuario', 'data'];
+    const column = columns[columnIndex];
     
-    if (rows.length === 0 || rows[0].cells.length <= columnIndex) return;
+    if (!column) return;
     
     const isAsc = !window.sortDirection || !window.sortDirection[columnIndex];
     window.sortDirection = window.sortDirection || {};
@@ -192,19 +251,66 @@ const sortTable = (columnIndex) => {
     const currentHeader = document.querySelectorAll('th.sortable')[columnIndex];
     currentHeader.classList.add(isAsc ? 'sort-asc' : 'sort-desc');
     
-    rows.sort((a, b) => {
-        const aText = a.cells[columnIndex]?.textContent.trim() || '';
-        const bText = b.cells[columnIndex]?.textContent.trim() || '';
+    dadosFiltrados.sort((a, b) => {
+        const aValue = (a[column] || '').toString();
+        const bValue = (b[column] || '').toString();
         
-        const aNum = parseFloat(aText);
-        const bNum = parseFloat(bText);
+        const aNum = parseFloat(aValue);
+        const bNum = parseFloat(bValue);
         
         if (!isNaN(aNum) && !isNaN(bNum)) {
             return isAsc ? aNum - bNum : bNum - aNum;
         }
         
-        return isAsc ? aText.localeCompare(bText) : bText.localeCompare(aText);
+        return isAsc ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
     });
     
-    rows.forEach(row => tbody.appendChild(row));
+    renderizarPagina();
 };
+
+// Funções para modal de baixa
+function abrirModalBaixa(pecaId, origem) {
+    document.getElementById('baixaPecaId').value = pecaId;
+    document.getElementById('modalBaixa').classList.add('show');
+    setTimeout(() => {
+        document.getElementById('motivoBaixa').focus();
+    }, 100);
+}
+
+function fecharModalBaixa() {
+    document.getElementById('modalBaixa').classList.remove('show');
+    document.getElementById('formBaixa').reset();
+}
+
+document.getElementById('formBaixa').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const pecaId = document.getElementById('baixaPecaId').value;
+    const motivoBaixa = document.getElementById('motivoBaixa').value;
+    const origem = 'saidas';
+    
+    if (!motivoBaixa) {
+        showPopup('Selecione o motivo da baixa', true);
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/baixar-peca', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: pecaId, motivo_baixa: motivoBaixa, origem })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showPopup(result.message);
+            fecharModalBaixa();
+            await carregarSaidas();
+        } else {
+            showPopup(result.message, true);
+        }
+    } catch (error) {
+        showPopup('Erro ao processar baixa: ' + error.message, true);
+    }
+});

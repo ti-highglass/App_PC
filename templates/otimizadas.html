@@ -31,7 +31,7 @@
                         <!-- Botões e pesquisa -->
                         <div class="bg-gray-50 rounded-xl p-6 mb-6">
                             <div class="flex justify-center gap-4 mb-4">
-                                {% if current_user and current_user.setor != 'Produção' %}
+                                {% if current_user and current_user.setor == 'T.I' %}
                                 <button id="btnEnviarEstoque" type="button" class="btn-large btn-disabled" disabled aria-disabled="true">
                                     <i class="fas fa-check mr-2"></i> Enviar Cortadas para Estoque
                                 </button>
@@ -39,8 +39,17 @@
                                 <button id="btnExcluir" onclick="excluirOtimizadas()" class="btn-large bg-red-600 hover:bg-red-700 text-white">
                                     <i class="fas fa-trash mr-2"></i> Excluir Selecionadas
                                 </button>
+                                <button onclick="gerarExcel()" class="btn-large bg-green-600 hover:bg-green-700 text-white">
+                                    <i class="fas fa-file-excel mr-2"></i> Gerar Excel
+                                </button>
                             </div>
-                            <div class="flex justify-center">
+                            <div class="flex justify-center gap-4">
+                                <select id="tipoFiltroOtimizadas" class="form-input-large" style="width: 250px;">
+                                    <option value="peca_op">PEÇA+OP</option>      
+                                    <option value="local">LOCAL</option>
+                                    <option value="data">DATA</option>
+                                    <option value="geral">Busca Geral</option>
+                                </select>
                                 <input type="text" id="campoPesquisaOtimizadas" placeholder="Pesquisar OP, Peça, Veículo, Local..." 
                                        class="form-input-large w-96" maxlength="10"
                                        oninput="filtrarTabelaOtimizadas()">
@@ -61,13 +70,14 @@
                                         <th class="border border-gray-200 px-4 py-3 text-left sortable" onclick="sortTable(4)">VEÍCULO</th>
                                         <th class="border border-gray-200 px-4 py-3 text-left sortable" onclick="sortTable(5)">LOCAL</th>
                                         <th class="border border-gray-200 px-4 py-3 text-left sortable" onclick="sortTable(6)">SENSOR</th>
-                                        <th class="border border-gray-200 px-4 py-3 text-center sortable" onclick="sortTable(7)">DATA CORTE</th>
+                                        <th class="border border-gray-200 px-4 py-3 text-left sortable" onclick="sortTable(7)">LOTE</th>
+                                        <th class="border border-gray-200 px-4 py-3 text-center sortable" onclick="sortTable(8)">DATA CORTE</th>
                                         <th class="border border-gray-200 px-4 py-3 text-center">AÇÃO</th>
                                     </tr>
                                 </thead>
                                 <tbody id="otimizadas-tbody">
                                     <tr>
-                                        <td colspan="9" class="border border-gray-200 px-4 py-6 text-center text-gray-500">
+                                        <td colspan="10" class="border border-gray-200 px-4 py-6 text-center text-gray-500">
                                             Carregando peças otimizadas...
                                         </td>
                                     </tr>
@@ -105,6 +115,51 @@
                 <div class="modal-baixa-footer">
                     <button type="button" onclick="fecharModalBaixa()" class="btn-modal btn-cancelar">Cancelar</button>
                     <button type="submit" class="btn-modal btn-confirmar">Confirmar Baixa</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal de Edição -->
+    <div id="modalEditarOtimizada" class="modal-baixa">
+        <div class="modal-baixa-content">
+            <div class="modal-baixa-header">
+                <h3>Editar Peça Otimizada</h3>
+                <button type="button" onclick="fecharModalEditarOtimizada()" class="modal-close-btn">&times;</button>
+            </div>
+            <form id="formEditarOtimizada">
+                <input type="hidden" id="editarOtimizadaId">
+                <div class="modal-baixa-body">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="modal-label">OP:</label>
+                            <input type="text" id="editarOtimizadaOP" class="form-input-large" required>
+                        </div>
+                        <div>
+                            <label class="modal-label">Peça:</label>
+                            <input type="text" id="editarOtimizadaPeca" class="form-input-large" required>
+                        </div>
+                        <div>
+                            <label class="modal-label">Projeto:</label>
+                            <input type="text" id="editarOtimizadaProjeto" class="form-input-large" required>
+                        </div>
+                        <div>
+                            <label class="modal-label">Veículo:</label>
+                            <input type="text" id="editarOtimizadaVeiculo" class="form-input-large" required>
+                        </div>
+                        <div>
+                            <label class="modal-label">Local:</label>
+                            <input type="text" id="editarOtimizadaLocal" class="form-input-large" required>
+                        </div>
+                        <div>
+                            <label class="modal-label">Sensor:</label>
+                            <input type="text" id="editarOtimizadaSensor" class="form-input-large">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-baixa-footer">
+                    <button type="button" onclick="fecharModalEditarOtimizada()" class="btn-modal btn-cancelar">Cancelar</button>
+                    <button type="submit" class="btn-modal btn-confirmar">Salvar Alterações</button>
                 </div>
             </form>
         </div>

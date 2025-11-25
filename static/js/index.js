@@ -109,19 +109,6 @@ async function coletarDados() {
     btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Atualizando...';
     
     try {
-        // Primeiro atualizar os apontamentos
-        const updateResponse = await fetch('/api/atualizar-apontamentos', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        });
-        
-        if (updateResponse.ok) {
-            const updateResult = await updateResponse.json();
-            console.log('Apontamentos atualizados:', updateResult.message);
-        }
-        
-        tbody.innerHTML = '<tr><td colspan="10" class="border border-gray-200 px-4 py-6 text-center text-gray-500">Carregando dados...</td></tr>';
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Carregando...';
         const params = new URLSearchParams();
         const lote = document.getElementById('lote').value;
         
@@ -139,8 +126,27 @@ async function coletarDados() {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         
-        const dados = await response.json();
+        const resultado = await response.json();
+        
+        // Verificar se há erro na resposta
+        if (resultado.error) {
+            throw new Error(resultado.error);
+        }
+        
+        // Verificar se é o novo formato com dados e peças sem local
+        let dados, pecasSemLocal = [];
+        if (resultado.dados && Array.isArray(resultado.dados)) {
+            dados = resultado.dados;
+            pecasSemLocal = resultado.pecas_sem_local || [];
+        } else if (Array.isArray(resultado)) {
+            // Formato antigo - compatibilidade
+            dados = resultado;
+        } else {
+            throw new Error('Formato de resposta inválido');
+        }
+        
         console.log('Dados recebidos:', dados.length, 'itens');
+        console.log('Peças sem local:', pecasSemLocal.length, 'itens');
         
         tbody.innerHTML = '';
         dados.forEach((item, index) => {
@@ -177,6 +183,11 @@ async function coletarDados() {
             `;
             cellAcoes.className = 'border border-gray-200 px-4 py-3 text-center';
         });
+        
+        // Mostrar alerta para peças sem local disponível
+        if (pecasSemLocal.length > 0) {
+            mostrarAlertaPecasSemLocal(pecasSemLocal);
+        }
         
     } catch (error) {
         console.error('Erro na coleta de dados:', error);
@@ -303,21 +314,38 @@ async function otimizarPecas() {
         
         if (result.success) {
             showPopup(result.message);
-            carregarContadorLocais(); // Atualizar contador após otimizar
+            carregarContadorLocais();
             if (result.redirect) {
                 setTimeout(() => window.location.href = result.redirect, 1500);
             } else {
                 checkboxes.forEach(cb => cb.closest('tr').remove());
             }
         } else {
-            showPopup(result.message, true);
+            // Mostrar erro sem bloquear interface
+            const alertDiv = document.createElement('div');
+            alertDiv.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #fee2e2; border: 1px solid #fecaca; color: #991b1b; padding: 16px; border-radius: 8px; max-width: 400px; z-index: 1000; box-shadow: 0 4px 6px rgba(0,0,0,0.1);';
+            alertDiv.innerHTML = `
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div>
+                        <strong>Erro:</strong><br>
+                        ${result.message}
+                    </div>
+                    <button onclick="this.parentElement.parentElement.remove()" style="background: none; border: none; font-size: 18px; cursor: pointer; color: #991b1b; margin-left: 10px;">&times;</button>
+                </div>
+            `;
+            document.body.appendChild(alertDiv);
+            
+            // Auto-remover após 10 segundos
+            setTimeout(() => {
+                if (alertDiv.parentElement) {
+                    alertDiv.remove();
+                }
+            }, 10000);
         }
     } catch (error) {
         hideLoading();
         console.error('Erro detalhado:', error);
-        // Como as peças estão sendo otimizadas mesmo com erro, mostrar sucesso
-        showPopup('Peças otimizadas com sucesso!\n\nRedirecionando para pré-entrada...');
-        setTimeout(() => window.location.href = '/otimizadas', 1500);
+        showPopup('Erro na comunicação com o servidor: ' + error.message, true);
     }
 }
 
@@ -344,17 +372,11 @@ async function gerarXML() {
     showLoading('Gerando XMLs...');
     
     try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 segundos
-        
         const response = await fetch('/api/gerar-xml', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ pecas: pecasSelecionadas }),
-            signal: controller.signal
+            body: JSON.stringify({ pecas: pecasSelecionadas })
         });
-        
-        clearTimeout(timeoutId);
         
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -364,27 +386,19 @@ async function gerarXML() {
         
         if (result.success) {
             updateLoading(result.message, false, true);
+            
+            // Se tem download, iniciar download
+            if (result.download && result.filename) {
+                setTimeout(() => {
+                    window.location.href = `/download-xml/${result.filename}`;
+                }, 1000);
+            }
         } else {
             updateLoading(result.message, true, true);
         }
     } catch (error) {
         console.error('Erro detalhado:', error);
-        if (error.name === 'AbortError') {
-            updateLoading('Timeout: Operação demorou mais que 60 segundos', true, true);
-        } else {
-            // Tentar buscar o resultado mesmo com erro de rede
-            try {
-                const fallbackResponse = await fetch('/api/gerar-xml', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pecas: pecasSelecionadas })
-                });
-                const fallbackResult = await fallbackResponse.json();
-                updateLoading(fallbackResult.message || 'XMLs gerados com sucesso!', !fallbackResult.success, true);
-            } catch {
-                updateLoading('XMLs podem ter sido gerados. Verifique a pasta AUTOMACAO LIBELLULA', true, true);
-            }
-        }
+        updateLoading('Erro ao gerar XMLs: ' + error.message, true, true);
     }
 }
 
@@ -654,11 +668,77 @@ function showPopup(message, isError = false) {
                     <i class="fas ${isError ? 'fa-exclamation-triangle' : 'fa-check-circle'}" style="font-size: 48px; color: ${isError ? '#dc2626' : '#16a34a'};"></i>
                 </div>
                 <p style="margin: 0 0 20px 0; font-size: 16px; color: #333; white-space: pre-line;">${message}</p>
-                <button onclick="this.closest('div').parentElement.remove()" style="padding: 8px 16px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer;">OK</button>
+                <button onclick="removePopup(this)" style="padding: 8px 16px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer;">OK</button>
             </div>
         </div>
     `;
     document.body.appendChild(popupDiv);
+}
+
+function removePopup(button) {
+    const popup = button.closest('div').parentElement;
+    popup.remove();
+    // Garantir que não há elementos bloqueando a interface
+    document.body.style.pointerEvents = 'auto';
+    document.body.style.overflow = 'auto';
+}
+
+function mostrarAlertaPecasSemLocal(pecasSemLocal) {
+    let mensagem = `⚠️ ATENÇÃO: ${pecasSemLocal.length} peça(s) não puderam ser coletadas por falta de slots disponíveis:\n\n`;
+    
+    // Mostrar até 10 peças na mensagem
+    const pecasParaMostrar = pecasSemLocal.slice(0, 10);
+    pecasParaMostrar.forEach(peca => {
+        mensagem += `• OP ${peca.op} - ${peca.peca} (${peca.projeto})\n`;
+    });
+    
+    if (pecasSemLocal.length > 10) {
+        mensagem += `\n... e mais ${pecasSemLocal.length - 10} peça(s)\n`;
+    }
+    
+    mensagem += `\n💡 Solução: Libere slots no estoque ou aumente a capacidade dos slots existentes.`;
+    
+    const alertDiv = document.createElement('div');
+    alertDiv.innerHTML = `
+        <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; display: flex; align-items: center; justify-content: center;">
+            <div style="background: white; padding: 25px; border-radius: 12px; text-align: left; box-shadow: 0 8px 16px rgba(0,0,0,0.15); max-width: 600px; max-height: 80vh; overflow-y: auto; border-left: 6px solid #f59e0b;">
+                <div style="display: flex; align-items: center; margin-bottom: 20px;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 32px; color: #f59e0b; margin-right: 15px;"></i>
+                    <h3 style="margin: 0; font-size: 20px; color: #333; font-weight: bold;">Peças Não Coletadas</h3>
+                </div>
+                <div style="background: #fef3c7; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #fbbf24;">
+                    <p style="margin: 0; font-size: 14px; color: #92400e; font-weight: 500;">
+                        <i class="fas fa-info-circle" style="margin-right: 8px;"></i>
+                        Estas peças não aparecem na tabela porque todos os slots estão cheios.
+                    </p>
+                </div>
+                <div style="max-height: 300px; overflow-y: auto; margin-bottom: 20px;">
+                    <pre style="margin: 0; font-size: 14px; color: #374151; white-space: pre-line; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.5;">${mensagem}</pre>
+                </div>
+                <div style="text-align: center;">
+                    <button onclick="fecharAlertaPecasSemLocal(this)" style="padding: 12px 24px; background: #f59e0b; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 16px; transition: background-color 0.2s;" onmouseover="this.style.backgroundColor='#d97706'" onmouseout="this.style.backgroundColor='#f59e0b'">Entendi</button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(alertDiv);
+}
+
+function fecharAlertaPecasSemLocal(button) {
+    const alertDiv = button.closest('div').parentElement;
+    alertDiv.remove();
+    
+    // Garantir que a interface está desbloqueada
+    document.body.style.pointerEvents = 'auto';
+    document.body.style.overflow = 'auto';
+    
+    // Remover qualquer overlay que possa estar bloqueando
+    const overlays = document.querySelectorAll('[style*="position: fixed"][style*="z-index"]');
+    overlays.forEach(overlay => {
+        if (overlay !== alertDiv && overlay.style.zIndex >= 9999) {
+            overlay.remove();
+        }
+    });
 }
 
 async function limparPecasManuais() {
@@ -905,9 +985,9 @@ async function carregarContadorLocais() {
                 if (local.status === 'Ativo') {
                     totalLocais++;
                     const ocupacao = ocupacaoMap[local.local] || 0;
-                    const limite = parseInt(local.limite) || 6;
                     
-                    if (ocupacao >= limite) {
+                    // Usar a mesma lógica da tela de locais: se tem peças = ocupado
+                    if (ocupacao > 0) {
                         locaisOcupados++;
                     } else {
                         locaisDisponiveis++;
@@ -915,10 +995,10 @@ async function carregarContadorLocais() {
                 }
             });
             
-            // Atualizar contadores na tela
-            document.getElementById('contadorLocaisDisponiveis').textContent = locaisDisponiveis;
-            document.getElementById('contadorLocaisOcupados').textContent = locaisOcupados;
+            // Atualizar contadores na tela (mesma ordem da tela de locais)
             document.getElementById('contadorTotalLocais').textContent = totalLocais;
+            document.getElementById('contadorLocaisOcupados').textContent = locaisOcupados;
+            document.getElementById('contadorLocaisDisponiveis').textContent = locaisDisponiveis;
         }
     } catch (error) {
         console.error('Erro ao carregar contador de locais:', error);

@@ -22,20 +22,33 @@
                 <!-- Conteúdo -->
                 <div class="p-6 md:p-8 w-full">
                     <div class="bg-white rounded-xl border border-gray-200 p-4 md:p-6 shadow-sm animate-fade-in w-full">
-                    <!-- Contador de Locais -->
-                    <div class="mb-6">
-                        <div class="flex justify-center gap-4">
-                            <div class="bg-white rounded-lg shadow-sm border border-blue-200 p-4 text-center min-w-32">
-                                <div class="text-xl font-bold text-blue-600" id="contadorLocaisDisponiveis">-</div>
-                                <div class="text-xs text-gray-600 mt-1">Locais Disponíveis</div>
+                    <!-- Contadores -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                        <div class="card-estatistica bg-green-50 border-green-200">
+                            <div class="card-icon bg-green-100 text-green-600">
+                                <i class="fas fa-check-circle"></i>
                             </div>
-                            <div class="bg-white rounded-lg shadow-sm border border-orange-200 p-4 text-center min-w-32">
-                                <div class="text-xl font-bold text-orange-600" id="contadorLocaisOcupados">-</div>
-                                <div class="text-xs text-gray-600 mt-1">Locais Ocupados</div>
+                            <div class="card-content">
+                                <p class="card-label text-green-600">Locais Ativos</p>
+                                <p class="card-value text-green-700" id="contadorTotalLocais">0</p>
                             </div>
-                            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 text-center min-w-32">
-                                <div class="text-xl font-bold text-gray-600" id="contadorTotalLocais">-</div>
-                                <div class="text-xs text-gray-600 mt-1">Total de Locais</div>
+                        </div>
+                        <div class="card-estatistica bg-red-50 border-red-200">
+                            <div class="card-icon bg-red-100 text-red-600">
+                                <i class="fas fa-box"></i>
+                            </div>
+                            <div class="card-content">
+                                <p class="card-label text-red-600">Locais Ocupados</p>
+                                <p class="card-value text-red-700" id="contadorLocaisOcupados">0</p>
+                            </div>
+                        </div>
+                        <div class="card-estatistica bg-blue-50 border-blue-200">
+                            <div class="card-icon bg-blue-100 text-blue-600">
+                                <i class="fas fa-inbox"></i>
+                            </div>
+                            <div class="card-content">
+                                <p class="card-label text-blue-600">Locais Disponíveis</p>
+                                <p class="card-value text-blue-700" id="contadorLocaisDisponiveis">0</p>
                             </div>
                         </div>
                     </div>
@@ -49,13 +62,13 @@
                             <button id="btnXML" onclick="gerarXML()" class="btn-large bg-green-600 hover:bg-green-700 text-white">
                                 <i class="fas fa-file-code mr-2"></i> Gerar XML
                             </button>
-                            <button id="btnExcel" onclick="gerarExcel()" class="btn-excel">
+                            <button id="btnExcel" onclick="gerarExcel()" class="btn-large bg-green-600 hover:bg-green-700 text-white">
                                 <i class="fas fa-file-excel mr-2"></i> Gerar Excel
                             </button>
                             <button id="btnOtimizar" onclick="otimizarPecas()" class="btn-large bg-red-600 hover:bg-red-700 text-white">
                                 <i class="fas fa-check mr-2"></i> Otimizar Peças
                             </button>
-                            <button id="btnAdicionar" onclick="abrirModalAdicionar()" class="btn-purple">
+                            <button id="btnAdicionar" onclick="abrirModalAdicionar()" class="btn-large bg-blue-600 hover:bg-blue-700 text-white">
                                 <i class="fas fa-plus mr-2"></i> Adicionar Peça
                             </button>
                         </div>

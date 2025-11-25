@@ -30,12 +30,12 @@
                                        class="form-input-large w-96"
                                        oninput="filtrarTabelaSaidas()">
                             </div>
-                            <div class="flex justify-center">
+                           <!-- <div class="flex justify-center">
                                 <button onclick="gerarExcel()" class="btn-large bg-green-600 hover:bg-green-700 text-white">
                                     <i class="fas fa-file-excel mr-2"></i> Gerar Excel
                                 </button>
                             </div>
-                        </div>
+                        </div> -->
 
                         <!-- Tabela de Saídas -->
                         <div class="overflow-x-auto">
@@ -63,7 +63,7 @@
                         </div>
                         
                         <!-- Controles de Paginação -->
-                        <div id="paginacao" class="flex justify-center items-center mt-6 gap-2" style="display: none;">
+                        <div id="paginacao" class="flex justify-center items-center mt-6 gap-2">
                             <button id="btnAnterior" onclick="mudarPagina(-1)" class="btn-pagination" disabled>
                                 <i class="fas fa-chevron-left mr-1"></i>Anterior
                             </button>
@@ -75,6 +75,36 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Modal de Baixa -->
+    <div id="modalBaixa" class="modal-baixa">
+        <div class="modal-baixa-content">
+            <div class="modal-baixa-header">
+                <h3>Baixa de Peça</h3>
+                <button type="button" onclick="fecharModalBaixa()" class="modal-close-btn">&times;</button>
+            </div>
+            <form id="formBaixa">
+                <input type="hidden" id="baixaPecaId">
+                <div class="modal-baixa-body">
+                    <label class="modal-label">Motivo da Baixa:</label>
+                    <select id="motivoBaixa" class="form-input-large" required>
+                        <option value="">Selecione o motivo...</option>
+                        <option value="Risco">Risco</option>
+                        <option value="Arquivo desatualizado">Arquivo desatualizado</option>
+                        <option value="Chapa Correu no Corte">Chapa Correu no Corte</option>
+                        <option value="Risco por estilete">Risco por estilete</option>
+                        <option value="Risco por Usinagem">Risco por Usinagem</option>
+                        <option value="Modelo de sensor errado">Modelo de sensor errado</option>
+                        <option value="Quebra">Quebra</option>
+                    </select>
+                </div>
+                <div class="modal-baixa-footer">
+                    <button type="button" onclick="fecharModalBaixa()" class="btn-modal btn-cancelar">Cancelar</button>
+                    <button type="submit" class="btn-modal btn-confirmar">Confirmar Baixa</button>
+                </div>
+            </form>
         </div>
     </div>
 

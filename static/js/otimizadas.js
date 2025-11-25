@@ -17,12 +17,12 @@ async function carregarOtimizadas() {
         tbody.innerHTML = '';
         
         if (dados.error) {
-            tbody.innerHTML = `<tr><td colspan="11" class="border border-gray-200 px-4 py-6 text-center text-red-500">Erro: ${dados.error}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="10" class="border border-gray-200 px-4 py-6 text-center text-red-500">Erro: ${dados.error}</td></tr>`;
             return;
         }
         
         if (dados.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="11" class="border border-gray-200 px-4 py-6 text-center text-gray-500">Nenhuma peça otimizada</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="10" class="border border-gray-200 px-4 py-6 text-center text-gray-500">Nenhuma peça otimizada</td></tr>';
             return;
         }
         
@@ -38,7 +38,7 @@ async function carregarOtimizadas() {
             const checkbox = checkCell.querySelector('.row-checkbox');
             checkbox.addEventListener('change', atualizarBotaoEnviarEstoque);
             
-            [item.op, item.peca, item.projeto, item.veiculo, item.local, item.sensor].forEach(value => {
+            [item.op, item.peca, item.projeto, item.veiculo, item.local, item.sensor, item.lote_pc].forEach(value => {
                 const cell = row.insertCell();
                 cell.textContent = value || '-';
                 cell.className = 'border border-gray-200 px-4 py-3 text-sm text-gray-700';
@@ -51,14 +51,15 @@ async function carregarOtimizadas() {
             const actionCell = row.insertCell();
             actionCell.className = 'border border-gray-200 px-4 py-3 text-center';
             
-            // Verificar se usuário é do setor Produção
-            const isProducao = window.userSetor === 'Produção';
+            // Verificar se usuário é do setor T.I
+            const isTI = window.userSetor === 'T.I';
             
             actionCell.innerHTML = `
-                <div class="flex flex-col gap-2 items-center">
-                    ${!isProducao ? `<button onclick="enviarPecaIndividual('${item.id}')" class="btn-action-large" title="Enviar para estoque"><i class="fas fa-arrow-right"></i></button>` : ''}
-                    <div class="${!isProducao ? 'border-t border-gray-300 pt-2' : ''} w-full text-center">
-                        <button onclick="abrirModalBaixa('${item.id}', 'otimizadas')" class="btn-yellow text-white" title="Baixa">Baixa</button>
+                <div class="flex flex-col gap-2">
+                    ${isTI ? `<button onclick="enviarPecaIndividual('${item.id}')" class="btn-estoque-editar" style="background-color: #16a34a !important; padding: 0.75rem 0.5rem; min-width: 50px;"><i class="fas fa-arrow-right" style="font-size: 1.2rem;"></i></button>` : ''}
+                    <div class="${isTI ? 'border-t border-gray-300 pt-2' : ''}">
+                        <button onclick="editarPecaOtimizada('${item.id}', '${item.op}', '${item.peca}', '${item.projeto}', '${item.veiculo}', '${item.local}', '${item.sensor || ''}')" class="btn-estoque-editar">Editar</button>
+                        <button onclick="abrirModalBaixa('${item.id}', 'otimizadas')" class="btn-estoque-baixa">Baixa</button>
                     </div>
                 </div>
             `;
@@ -68,7 +69,7 @@ async function carregarOtimizadas() {
         atualizarBotaoEnviarEstoque();
         
     } catch (error) {
-        tbody.innerHTML = '<tr><td colspan="12" class="border border-gray-200 px-4 py-6 text-center text-red-500">Erro ao carregar peças</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" class="border border-gray-200 px-4 py-6 text-center text-red-500">Erro ao carregar peças</td></tr>';
     }
 }
 
@@ -83,6 +84,9 @@ const toggleAll = () => {
 function atualizarBotaoEnviarEstoque() {
     const btnEnviarEstoque = document.getElementById('btnEnviarEstoque');
     if (!btnEnviarEstoque) return;
+    
+    // Verificar se usuário é T.I
+    if (window.userSetor !== 'T.I') return;
     
     const checkboxes = document.querySelectorAll('.row-checkbox:checked');
     const temSelecionadas = checkboxes.length > 0;
@@ -298,6 +302,7 @@ function hideLoading() {
 
 const filtrarTabelaOtimizadas = () => {
     const filtro = document.getElementById('campoPesquisaOtimizadas').value.toLowerCase();
+    const tipoFiltro = document.getElementById('tipoFiltroOtimizadas').value;
     let visibleCount = 0;
     
     document.querySelectorAll('#otimizadas-tbody tr').forEach(linha => {
@@ -307,12 +312,27 @@ const filtrarTabelaOtimizadas = () => {
         if (cells.length > 1) {
             const op = cells[1].textContent.toLowerCase();
             const peca = cells[2].textContent.toLowerCase();
+            const projeto = cells[3].textContent.toLowerCase();
+            const veiculo = cells[4].textContent.toLowerCase();
+            const local = cells[5].textContent.toLowerCase();
+            const dataCorte = cells[8] ? cells[8].textContent.toLowerCase() : '';
             
-            // Buscar por peça+op+camada (formato: TSP12345PC)
-            const pecaOpCamada = `${peca}${op}pc`;
-            
-            match = linha.textContent.toLowerCase().includes(filtro) ||
-                   pecaOpCamada.includes(filtro);
+            switch (tipoFiltro) {
+                case 'peca_op':
+                    const pecaOpCamada = `${peca}${op}pc`;
+                    match = pecaOpCamada.includes(filtro) || op.includes(filtro) || peca.includes(filtro);
+                    break;
+                case 'local':
+                    match = local.includes(filtro);
+                    break;
+                case 'data':
+                    match = dataCorte.includes(filtro);
+                    break;
+                case 'geral':
+                default:
+                    match = linha.textContent.toLowerCase().includes(filtro);
+                    break;
+            }
         } else {
             match = linha.textContent.toLowerCase().includes(filtro);
         }
@@ -328,6 +348,38 @@ function atualizarContadorOtimizadas(count) {
     const contador = document.getElementById('contadorOtimizadas');
     if (contador) {
         contador.innerHTML = `<i class="fas fa-cogs mr-2"></i>${count} peça${count !== 1 ? 's' : ''}`;
+    }
+}
+
+async function gerarExcel() {
+    showLoading('Gerando Excel...');
+    
+    try {
+        const response = await fetch('/api/gerar-excel-otimizadas', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (response.ok) {
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `pecas_otimizadas_${new Date().toISOString().split('T')[0]}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+            
+            hideLoading();
+            showPopup('Excel gerado com sucesso!');
+        } else {
+            hideLoading();
+            showPopup('Erro ao gerar Excel', true);
+        }
+    } catch (error) {
+        hideLoading();
+        showPopup('Erro ao gerar Excel: ' + error.message, true);
     }
 }
 
@@ -413,5 +465,63 @@ document.getElementById('formBaixa').addEventListener('submit', async function(e
         }
     } catch (error) {
         showPopup('Erro ao processar baixa: ' + error.message, true);
+    }
+});
+
+// Funções para modal de edição
+function editarPecaOtimizada(id, op, peca, projeto, veiculo, local, sensor) {
+    document.getElementById('editarOtimizadaId').value = id;
+    document.getElementById('editarOtimizadaOP').value = op;
+    document.getElementById('editarOtimizadaPeca').value = peca;
+    document.getElementById('editarOtimizadaProjeto').value = projeto;
+    document.getElementById('editarOtimizadaVeiculo').value = veiculo;
+    document.getElementById('editarOtimizadaLocal').value = local;
+    document.getElementById('editarOtimizadaSensor').value = sensor || '';
+    
+    document.getElementById('modalEditarOtimizada').classList.add('show');
+    setTimeout(() => {
+        document.getElementById('editarOtimizadaOP').focus();
+    }, 100);
+}
+
+function fecharModalEditarOtimizada() {
+    document.getElementById('modalEditarOtimizada').classList.remove('show');
+    document.getElementById('formEditarOtimizada').reset();
+}
+
+document.getElementById('formEditarOtimizada').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const pecaId = document.getElementById('editarOtimizadaId').value;
+    const op = document.getElementById('editarOtimizadaOP').value.trim();
+    const peca = document.getElementById('editarOtimizadaPeca').value.trim();
+    const projeto = document.getElementById('editarOtimizadaProjeto').value.trim();
+    const veiculo = document.getElementById('editarOtimizadaVeiculo').value.trim();
+    const local = document.getElementById('editarOtimizadaLocal').value.trim();
+    const sensor = document.getElementById('editarOtimizadaSensor').value.trim();
+    
+    if (!op || !peca || !projeto || !veiculo || !local) {
+        showPopup('Todos os campos obrigatórios devem ser preenchidos', true);
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/editar-peca-otimizada', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: pecaId, op, peca, projeto, veiculo, local, sensor })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showPopup(result.message);
+            fecharModalEditarOtimizada();
+            await carregarOtimizadas();
+        } else {
+            showPopup(result.message, true);
+        }
+    } catch (error) {
+        showPopup('Erro ao editar peça: ' + error.message, true);
     }
 });
